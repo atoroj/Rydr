@@ -8,6 +8,10 @@ fastapi = "*"
 sqlalchemy = "*"
 uvicorn = "*"
 email-validator = "*"
+fastapi-sso = "*"
+python-jose = "*"
+pytest = "*"
+httpx = "*"
 
 [dev-packages]
 

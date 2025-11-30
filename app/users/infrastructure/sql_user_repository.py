@@ -9,7 +9,7 @@ class SqlAlchemyUserRepository(UserRepository):
         self.db = db
         
     def save(self, user: User):
-        user_db = UserModel(email=user.email, username=user.username)
+        user_db = UserModel(email=user.email, username=user.username, password=user.password)
         self.db.add(user_db)
         self.db.commit()
         self.db.refresh(user_db)
