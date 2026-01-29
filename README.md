@@ -1,48 +1,79 @@
 # 🏍️ Rydr Backend API
 
-Backend moderno construido con **Python** y **FastAPI**, diseñado con una arquitectura escalable de **Vertical Slicing** (Módulos funcionales) y **Arquitectura Hexagonal**.
+A modern Backend API built with **Python** and **FastAPI**, engineered with a scalable **Vertical Slicing** (Feature Modules) approach and **Hexagonal Architecture** (Ports & Adapters).
 
-## 🏗️ Arquitectura y Diseño
+## 🏗️ Architecture & Design Decisions
 
-El proyecto se aleja de la estructura tradicional de capas (MVC) para favorecer la independencia de módulos.
+This project moves away from the traditional Layered Architecture (MVC) to favor module independence and domain-centric design.
 
-### Estructura de Carpetas
-* **`app/shared/`**: Kernel compartido (Configuración DB, Seguridad, Utilitarios).
-* **`app/users/`**: Slice de gestión de usuarios (CRUD).
-* **`app/auth/`**: Slice de autenticación (Login, Tokens, OAuth).
+### 📂 Directory Structure Strategy
+* **`app/shared/`**: Shared Kernel (Database configuration, Security, Utilities).
+* **`app/users/`**: User Management Slice (CRUD, Profile).
+* **`app/auth/`**: Authentication Slice (Login, Token Management).
 
-Cada slice (`users`, `auth`) implementa internamente **Arquitectura Hexagonal**:
-* **Domain:** Entidades y Puertos (Interfaces).
-* **Application:** Servicios y Lógica de Negocio.
-* **Infrastructure:** Adaptadores (API Router, SQL Repository, Modelos DB).
+### ⬢ Hexagonal Architecture Implementation
+Each slice (`users`, `auth`) implements its own internal Hexagonal Architecture to decouple business logic from external details:
 
----
-
-## 🚀 Tecnologías y Librerías
-
-Según `Pipfile`:
-
-* **Lenguaje:** Python 3.14
-* **Framework Web:** `fastapi` + `uvicorn`
-* **Base de Datos:** `sqlalchemy` (SQLite por defecto para desarrollo)
-* **Validación:** Pydantic (integrado en FastAPI) + `email-validator`
-* **Seguridad:**
-    * `python-jose`: Generación y validación de JWT.
-    * `bcrypt`: Hasheo seguro de contraseñas.
-    * `fastapi-sso`: Autenticación OAuth2 (Google). (No implementado aún)
-* **Testing:** `pytest` + `httpx`.
+* **Domain:** Core entities and Ports (Repository Interfaces). *Pure Python code, no external dependencies.*
+* **Application:** Use Cases, Services, and DTOs. *Orchestrates logic.*
+* **Infrastructure:** Adapters (API Routers, SQL Repositories, ORM Models). *Framework and Database details.*
 
 ---
 
-## 📂 Estructura del Proyecto
+## 🚀 Tech Stack
+
+* **Language:** Python 3.14
+* **Web Framework:** `fastapi` + `uvicorn` (High performance ASGI)
+* **Database:** `sqlalchemy` (SQLite for dev / PostgreSQL ready)
+* **Validation:** Pydantic + `email-validator`
+* **Security:**
+    * `python-jose`: JWT generation and validation.
+    * `bcrypt`: Secure password hashing.
+    * `fastapi-sso`: OAuth2 integration (Planned).
+* **Testing:** `pytest` + `httpx` for integration testing.
+
+---
+
+## 🛠️ Project Structure
+
+The codebase is organized to ensure that business logic remains decoupled from the framework and database.
 
 ```text
 Rydr/
 ├── app/
-│   ├── shared/              # Security, Database config
-│   ├── users/               # Domain, Application, Infrastructure
-│   ├── auth/                # Domain, Application, Infrastructure
-│   └── main.py              # Entrypoint
-├── tests/                   # Tests de integración (conftest.py)
-├── Pipfile                  # Gestión de dependencias y scripts
+│   ├── shared/              # Shared Kernel (DB Session, Security Utils)
+│   ├── users/               # [Vertical Slice] User Domain
+│   │   ├── application/     # Service Layer (Use Cases) & DTOs
+│   │   ├── domain/          # Entities & Repository Interfaces (Ports)
+│   │   └── infrastructure/  # DB Models, Repositories & API Routes
+│   ├── auth/                # [Vertical Slice] Auth Domain
+│   │   ├── application/     # Auth Services
+│   │   ├── domain/          # Auth Models
+│   │   └── infrastructure/  # Routers & Adapters
+│   └── main.py              # Application Entrypoint
+├── tests/                   # Integration Tests
+├── Pipfile                  # Dependency Management
 └── README.md
+```
+
+## ⚡ How to Run
+
+1. **Install Dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   # OR if using pipenv
+   pipenv install
+   pipenv shell
+   ```
+
+2. **Run the Server:**
+    ```bash
+    uvicorn app.main:app --reload
+    ```
+
+## 🧪 Testing
+
+   **To run the integration tests:**
+    ```
+    pytest
+    ```
