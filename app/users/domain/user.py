@@ -6,3 +6,4 @@ class User:
     email: str
     username: str
     password: str
+    role: str

@@ -2,9 +2,13 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import jwt
 import bcrypt
+import os
+from dotenv import load_dotenv
 
-SECRET_KEY = "abcdefghijklmnñ"
-ALGORITHM = "HS256"
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
 ACCES_TOKEN_EXPIRE_MINUTES = 30
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

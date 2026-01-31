@@ -16,7 +16,7 @@ def get_service(db: Session = Depends(get_db)) -> UserService:
 @router.post("/", response_model=UserResponse)
 def create_user(request: UserCreate, service: UserService = Depends(get_service)):
     try:
-        created_user = service.create_user(request.username, request.email, request.password)
+        created_user = service.create_user(request.username, request.email, request.password, request.role)
         return created_user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
