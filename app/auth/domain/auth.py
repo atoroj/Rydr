@@ -1,9 +1,7 @@
 from dataclasses import dataclass
 
 @dataclass
-class User:
-    id: int | None
+class Auth:
     email: str
-    username: str
-    password: str
+    password_hash: str
     role: str

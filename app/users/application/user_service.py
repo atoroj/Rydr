@@ -7,13 +7,13 @@ class UserService:
     def __init__(self, repository: UserRepository):
         self.repository = repository
     
-    def create_user(self, username: str, email:str, password: str):
+    def create_user(self, username: str, email:str, password: str, role: str):
         if self.repository.get_by_email(email):
             raise ValueError("El email ya existe")
         
         hashed_password = get_password_hashed(password)
         
-        user = User(id=None, username=username, email=email, password=hashed_password)
+        user = User(id=None, username=username, email=email, password=hashed_password, role=role)
         return self.repository.save(user)
     
     def get_user_by_email(self, email: str):

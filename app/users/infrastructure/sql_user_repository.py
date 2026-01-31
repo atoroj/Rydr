@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.users.domain.user import User
 from app.users.domain.user_repository import UserRepository
-from app.users.infrastructure.models import UserModel
+from app.users.infrastructure.user_model import UserModel
 
 class SqlAlchemyUserRepository(UserRepository):
     def __init__(self, db: Session):
@@ -14,18 +14,18 @@ class SqlAlchemyUserRepository(UserRepository):
         self.db.commit()
         self.db.refresh(user_db)
         
-        return User(id=user_db.id, email=user_db.email, username=user_db.username, password=user_db.password)
+        return User(id=user_db.id, email=user_db.email, username=user_db.username, password=user_db.password, role=user_db.role)
     
     def get_by_email(self, email: str) -> User | None:
         user_db = self.db.query(UserModel).filter(UserModel.email == email).first()
         if not user_db:
             return None
-        return User(id=user_db.id, email=user_db.email, username=user_db.username, password=user_db.password)        
+        return User(id=user_db.id, email=user_db.email, username=user_db.username, password=user_db.password, role=user_db.role)
     
     def get_all(self) -> List[User]:
         users_db = self.db.query(UserModel).all()
         
         return [
-            User(id=u.id, email=u.email, username=u.username, password=u.password)
+            User(id=u.id, email=u.email, username=u.username, password=u.password, role=u.role)
             for u in users_db
         ]
