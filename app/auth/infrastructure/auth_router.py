@@ -6,7 +6,7 @@ from app.auth.application.auth_dto import LoginRequest
 from app.users.infrastructure.sql_user_repository import SqlAlchemyUserRepository
 from app.users.application.user_service import UserService
 from app.auth.infrastructure.adapters.user_adapter import LocalUserAdapter
-from app.auth.application.service import AuthService
+from app.auth.application.auth_service import AuthService
 
 # Para Google OAuth
 from fastapi_sso.sso.google import GoogleSSO
