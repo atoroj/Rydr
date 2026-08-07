@@ -1,0 +1,40 @@
+name: rydr
+description: "Strava para motociclistas — graba rutas GPS y compártelas."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Estado global
+  flutter_riverpod: ^2.6.1
+
+  # HTTP
+  dio: ^5.7.0
+
+  # Navegación
+  go_router: ^14.6.2
+
+  # Almacenamiento seguro (JWT token)
+  flutter_secure_storage: ^9.2.2
+
+  # GPS
+  geolocator: ^13.0.2
+  permission_handler: ^11.3.1
+
+  # Mapas (OpenStreetMap)
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

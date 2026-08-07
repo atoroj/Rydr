@@ -12,7 +12,8 @@ class SqlAlchemyMotorbikeRepository(MotorbikeRepostiroy):
         self.db = db
 
     def save(self, motorbike: Motorbike):
-        motorbike_db = MotorbikeModel(user_id=motorbike.user_id, type=motorbike.type,
+        type_value = motorbike.type.value if hasattr(motorbike.type, "value") else motorbike.type
+        motorbike_db = MotorbikeModel(user_id=motorbike.user_id, type=type_value,
                                       brand=motorbike.brand, model=motorbike.model,
                                       cc=motorbike.cc, alias=motorbike.alias)
         self.db.add(motorbike_db)
@@ -40,8 +41,10 @@ class SqlAlchemyMotorbikeRepository(MotorbikeRepostiroy):
             for motorbike in motorbikes_db
         ]
 
-    def get_by_id(self, id: int) -> Motorbike:
-        motorsbike_db = self.db.query(MotorbikeModel).filter(MotorbikeModel.id == id)
-        return Motorbike(id=motorsbike_db.id, user_id=motorsbike_db.user_id, type=motorsbike_db.type,
-                                      brand=motorsbike_db.brand, model=motorsbike_db.model,
-                                      cc=motorsbike_db.cc, alias=motorsbike_db.alias)
+    def get_by_id(self, id: int) -> Motorbike | None:
+        motorbike_db = self.db.query(MotorbikeModel).filter(MotorbikeModel.id == id).first()
+        if motorbike_db is None:
+            return None
+        return Motorbike(id=motorbike_db.id, user_id=motorbike_db.user_id, type=motorbike_db.type,
+                         brand=motorbike_db.brand, model=motorbike_db.model,
+                         cc=motorbike_db.cc, alias=motorbike_db.alias)

@@ -1,0 +1,22 @@
+from abc import ABC, abstractmethod
+from typing import Optional, List
+
+from app.routes.domain.route import Route
+
+
+class RouteRepository(ABC):
+    @abstractmethod
+    def save(self, route: Route) -> Route:
+        pass
+
+    @abstractmethod
+    def get_by_id(self, route_id: int) -> Optional[Route]:
+        pass
+
+    @abstractmethod
+    def get_all_public(self) -> List[Route]:
+        pass
+
+    @abstractmethod
+    def increment_times_ridden(self, route_id: int) -> None:
+        pass

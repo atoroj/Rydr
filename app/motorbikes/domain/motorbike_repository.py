@@ -4,7 +4,7 @@ from app.motorbikes.domain.motorbike import Motorbike
 
 class MotorbikeRepostiroy(ABC):
     @abstractmethod
-    def save(self, motorbikes: Motorbike) -> None:
+    def save(self, motorbike: Motorbike) -> Motorbike:
         pass
 
     @abstractmethod
