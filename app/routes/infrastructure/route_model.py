@@ -15,3 +15,4 @@ class RouteModel(Base):
     duration_minutes = Column(Integer, nullable=False)
     created_at = Column(DateTime, nullable=False)
     times_ridden = Column(Integer, default=0, nullable=False)
+    cover_image_url = Column(String, nullable=True)

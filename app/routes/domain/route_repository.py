@@ -18,5 +18,9 @@ class RouteRepository(ABC):
         pass
 
     @abstractmethod
+    def get_all_by_author(self, author_id: int) -> List[Route]:
+        pass
+
+    @abstractmethod
     def increment_times_ridden(self, route_id: int) -> None:
         pass

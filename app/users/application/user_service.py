@@ -21,3 +21,6 @@ class UserService:
     
     def get_all_users(self) -> List[User]:
         return self.repository.get_all()
+
+    def update_profile(self, user_id: int, username: str | None = None, avatar_url: str | None = None, is_private: bool | None = None) -> User:
+        return self.repository.update_profile(user_id, username, avatar_url, is_private)

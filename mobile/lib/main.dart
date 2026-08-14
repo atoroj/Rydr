@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'core/config/mapbox_config.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
 
 void main() {
+  // MapboxOptions.setAccessToken registra un canal de plataforma y necesita
+  // el binding de Flutter ya inicializado; si se llama antes, lanza
+  // "Binding has not yet been initialized" y la app se queda colgada en el
+  // splash nativo sin pintar nada (justo lo que pasaba).
+  WidgetsFlutterBinding.ensureInitialized();
+  MapboxOptions.setAccessToken(MapboxConfig.accessToken);
   runApp(
     // ProviderScope es el "contenedor" de Riverpod.
     // Debe envolver TODA la app para que cualquier widget pueda leer providers.

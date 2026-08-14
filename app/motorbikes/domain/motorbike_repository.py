@@ -18,3 +18,19 @@ class MotorbikeRepostiroy(ABC):
     @abstractmethod
     def get_all(self) -> List[Motorbike]:
         pass
+
+    @abstractmethod
+    def set_current(self, user_id: int, motorbike_id: int) -> Motorbike:
+        """Marca `motorbike_id` como la moto actual de `user_id` y desmarca
+        cualquier otra que lo fuera antes (solo puede haber una a la vez)."""
+        pass
+
+    @abstractmethod
+    def update(self, motorbike_id: int, user_id: int, **fields) -> Motorbike:
+        """Actualiza los campos no-`None` de `fields`. Solo el dueño puede editar."""
+        pass
+
+    @abstractmethod
+    def delete(self, motorbike_id: int, user_id: int) -> None:
+        """Solo el dueño puede borrar."""
+        pass

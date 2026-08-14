@@ -22,6 +22,7 @@ class MotorbikesNotifier extends AsyncNotifier<List<MotorbikeModel>> {
     required String model,
     required int cc,
     String? alias,
+    String? photoUrl,
   }) async {
     final user = ref.read(authProvider).value;
     if (user == null) return;
@@ -35,7 +36,23 @@ class MotorbikesNotifier extends AsyncNotifier<List<MotorbikeModel>> {
             model: model,
             cc: cc,
             alias: alias,
+            photoUrl: photoUrl,
           );
+      return ref
+          .read(motorbikeRepositoryProvider)
+          .getMotorbikesByUser(user.id);
+    });
+  }
+
+  /// Marca [motorbikeId] como la moto actual (garaje virtual): la que
+  /// aparece en el perfil social y en el listado de Riders.
+  Future<void> setCurrent(int motorbikeId) async {
+    final user = ref.read(authProvider).value;
+    if (user == null) return;
+
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await ref.read(motorbikeRepositoryProvider).setCurrent(motorbikeId);
       return ref
           .read(motorbikeRepositoryProvider)
           .getMotorbikesByUser(user.id);

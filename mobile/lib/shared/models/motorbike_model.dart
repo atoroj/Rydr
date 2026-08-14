@@ -6,6 +6,8 @@ class MotorbikeModel {
   final String model;
   final int cc;
   final String? alias;
+  final String? photoUrl;
+  final bool isCurrent;
 
   const MotorbikeModel({
     required this.id,
@@ -15,6 +17,8 @@ class MotorbikeModel {
     required this.model,
     required this.cc,
     this.alias,
+    this.photoUrl,
+    this.isCurrent = false,
   });
 
   factory MotorbikeModel.fromJson(Map<String, dynamic> json) => MotorbikeModel(
@@ -25,6 +29,8 @@ class MotorbikeModel {
         model: json['model'] as String,
         cc: json['cc'] as int,
         alias: json['alias'] as String?,
+        photoUrl: json['photo_url'] as String?,
+        isCurrent: json['is_current'] as bool? ?? false,
       );
 
   String get displayName => alias ?? '$brand $model';

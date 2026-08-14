@@ -7,3 +7,5 @@ class User:
     username: str
     password: str
     role: str
+    avatar_url: str | None = None
+    is_private: bool = False

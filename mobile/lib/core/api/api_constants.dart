@@ -10,4 +10,6 @@ class ApiConstants {
   static const String motorbikes = '/motorbikes';
   static const String rides = '/rides';
   static const String routes = '/routes';
+  static const String riders = '/riders';
+  static const String uploadImage = '/uploads/image';
 }

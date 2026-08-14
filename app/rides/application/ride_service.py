@@ -48,3 +48,6 @@ class RideService:
 
     def get_ride_by_id(self, ride_id: int) -> Optional[Ride]:
         return self.repository.get_by_id(ride_id)
+
+    def delete_ride(self, ride_id: int) -> bool:
+        return self.repository.delete(ride_id)

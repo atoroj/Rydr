@@ -45,5 +45,25 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- Token público de Mapbox (pk.), requerido por mapbox_maps_flutter -->
+	<key>MBXAccessToken</key>
+	<string>***REMOVED-MAPBOX-TOKEN***</string>
+
+	<!-- Permisos GPS: sin estas claves iOS rechaza la petición de localización
+	     sin avisar, con o sin Mapbox de por medio. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Rydr necesita tu ubicación para mostrar el mapa y grabar tus rutas en moto.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Rydr necesita tu ubicación en segundo plano para seguir grabando la ruta aunque bloquees el teléfono.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Rydr necesita tu ubicación en segundo plano para seguir grabando la ruta aunque bloquees el teléfono.</string>
+
+	<!-- Permite que la grabación de ruta siga activa en segundo plano (equivalente
+	     al FOREGROUND_SERVICE_LOCATION de Android) -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 </dict>
 </plist>

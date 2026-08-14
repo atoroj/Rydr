@@ -28,11 +28,7 @@ class AuthRepository {
     final userResponse = await _dio.get('${ApiConstants.users}/email/$email');
     final user = UserModel.fromJson(userResponse.data as Map<String, dynamic>);
 
-    // Guardamos id y username para recuperarlos sin red
-    await _storage.write(key: 'user_id', value: user.id.toString());
-    await _storage.write(key: 'username', value: user.username);
-    await _storage.write(key: 'email', value: user.email);
-
+    await _cacheUser(user);
     return user;
   }
 
@@ -45,7 +41,39 @@ class AuthRepository {
     final email = await _storage.read(key: 'email');
 
     if (id == null || username == null || email == null) return null;
-    return UserModel(id: int.parse(id), username: username, email: email);
+    return UserModel(
+      id: int.parse(id),
+      username: username,
+      email: email,
+      avatarUrl: await _storage.read(key: 'avatar_url'),
+      isPrivate: (await _storage.read(key: 'is_private')) == 'true',
+    );
+  }
+
+  /// Guarda cambios de perfil (avatar/username/privacidad) vía `/users/me`
+  /// (requiere el JWT, que ya añade el interceptor de ApiClient) y
+  /// refresca la caché local para que sobrevivan a un reinicio de la app.
+  Future<UserModel> updateProfile({
+    String? username,
+    String? avatarUrl,
+    bool? isPrivate,
+  }) async {
+    final response = await _dio.patch('${ApiConstants.users}/me', data: {
+      if (username != null) 'username': username,
+      if (avatarUrl != null) 'avatar_url': avatarUrl,
+      if (isPrivate != null) 'is_private': isPrivate,
+    });
+    final user = UserModel.fromJson(response.data as Map<String, dynamic>);
+    await _cacheUser(user);
+    return user;
+  }
+
+  Future<void> _cacheUser(UserModel user) async {
+    await _storage.write(key: 'user_id', value: user.id.toString());
+    await _storage.write(key: 'username', value: user.username);
+    await _storage.write(key: 'email', value: user.email);
+    await _storage.write(key: 'avatar_url', value: user.avatarUrl);
+    await _storage.write(key: 'is_private', value: user.isPrivate.toString());
   }
 
   Future<void> logout() async {

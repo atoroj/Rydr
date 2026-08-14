@@ -11,12 +11,14 @@ class CreateRouteRequest(BaseModel):
     geojson: dict
     distance_km: float
     duration_minutes: int
+    cover_image_url: Optional[str] = None
 
 
 class CreateRouteFromRideRequest(BaseModel):
     ride_id: int
     name: str
     description: Optional[str] = None
+    cover_image_url: Optional[str] = None
 
 
 class RouteResponse(BaseModel):
@@ -29,5 +31,6 @@ class RouteResponse(BaseModel):
     duration_minutes: int
     created_at: datetime
     times_ridden: int
+    cover_image_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

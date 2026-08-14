@@ -20,6 +20,13 @@ class RouteRepository {
         .toList();
   }
 
+  Future<List<RouteModel>> getRoutesByUser(int userId) async {
+    final response = await _dio.get('${ApiConstants.routes}/user/$userId');
+    return (response.data as List<dynamic>)
+        .map((json) => RouteModel.fromJson(json as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<RouteModel> getRouteById(int routeId) async {
     final response = await _dio.get('${ApiConstants.routes}/$routeId');
     return RouteModel.fromJson(response.data as Map<String, dynamic>);
@@ -29,11 +36,13 @@ class RouteRepository {
     required int rideId,
     required String name,
     String? description,
+    String? coverImageUrl,
   }) async {
     final response = await _dio.post('${ApiConstants.routes}/from-ride', data: {
       'ride_id': rideId,
       'name': name,
       if (description != null) 'description': description,
+      if (coverImageUrl != null) 'cover_image_url': coverImageUrl,
     });
     return RouteModel.fromJson(response.data as Map<String, dynamic>);
   }

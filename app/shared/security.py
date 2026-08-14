@@ -9,7 +9,10 @@ load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
-ACCES_TOKEN_EXPIRE_MINUTES = 30
+# 30 min se agota a media sesión de pruebas manuales (y la app aún no tiene
+# refresh token / re-login automático al expirar) — hasta que haya ese
+# flujo, mejor una sesión larga que un 401 sorpresa a media prueba.
+ACCES_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 días
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """

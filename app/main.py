@@ -1,19 +1,31 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.shared.database import Base, engine
+from app.shared.migrations import run_light_migrations
+from app.shared.uploads_router import UPLOAD_DIR, router as uploads_router
 from app.users.infrastructure.user_router import router as user_router
 from app.auth.infrastructure.auth_router import router as auth_router
 from app.motorbikes.infraestructure.motorbike_router import router as motorbike_router
 from app.rides.infrastructure.ride_router import router as ride_router
 from app.routes.infrastructure.route_router import router as route_router
+from app.riders.infrastructure.follow_router import router as follow_router
+from app.meetups.infrastructure.meetup_router import router as meetup_router
 # Importar modelos para que SQLAlchemy los registre al crear tablas
 from app.users.infrastructure.user_model import UserModel
 from app.motorbikes.infraestructure.motorbike_model import MotorbikeModel
 from app.rides.infrastructure.ride_model import RideModel, TrackPointModel
 from app.routes.infrastructure.route_model import RouteModel
+from app.riders.infrastructure.follow_model import FollowModel
+from app.meetups.infrastructure.meetup_model import MeetupModel, MeetupParticipantModel
 
 # Crear tablas (Solo para desarrollo rápido)
 Base.metadata.create_all(bind=engine)
+# Añade a la BD existente las columnas que se han sumado a modelos ya
+# creados (create_all no altera tablas existentes, solo crea las que faltan)
+run_light_migrations(engine)
 
 app = FastAPI()
 
@@ -25,8 +37,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
 app.include_router(user_router)
 app.include_router(auth_router)
 app.include_router(motorbike_router)
 app.include_router(ride_router)
 app.include_router(route_router)
+app.include_router(uploads_router)
+app.include_router(follow_router)
+app.include_router(meetup_router)

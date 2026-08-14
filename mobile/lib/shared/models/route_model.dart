@@ -10,6 +10,7 @@ class RouteModel {
   final int durationMinutes;
   final DateTime createdAt;
   final int timesRidden;
+  final String? coverImageUrl;
 
   const RouteModel({
     required this.id,
@@ -21,6 +22,7 @@ class RouteModel {
     required this.durationMinutes,
     required this.createdAt,
     required this.timesRidden,
+    this.coverImageUrl,
   });
 
   /// Extrae la lista de puntos del GeoJSON LineString para dibujar en el mapa.
@@ -44,5 +46,6 @@ class RouteModel {
         durationMinutes: json['duration_minutes'] as int,
         createdAt: DateTime.parse(json['created_at'] as String),
         timesRidden: json['times_ridden'] as int,
+        coverImageUrl: json['cover_image_url'] as String?,
       );
 }

@@ -19,3 +19,6 @@ class Motorbike:
     model: str
     cc: int
     alias: str | None
+    photo_url: str | None = None
+    is_current: bool = False
+    year: int | None = None

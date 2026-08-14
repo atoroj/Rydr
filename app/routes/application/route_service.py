@@ -11,7 +11,7 @@ class RouteService:
     def __init__(self, repository: RouteRepository):
         self.repository = repository
 
-    def create_route_from_ride(self, ride: Ride, name: str, description: Optional[str]) -> Route:
+    def create_route_from_ride(self, ride: Ride, name: str, description: Optional[str], cover_image_url: Optional[str] = None) -> Route:
         if not ride.finished_at:
             raise ValueError("El ride debe estar finalizado para crear una ruta")
         if not ride.track_points:
@@ -40,6 +40,7 @@ class RouteService:
             duration_minutes=duration_minutes,
             created_at=datetime.now(),
             times_ridden=0,
+            cover_image_url=cover_image_url,
         )
         return self.repository.save(route)
 
@@ -51,6 +52,7 @@ class RouteService:
         geojson: dict,
         distance_km: float,
         duration_minutes: int,
+        cover_image_url: Optional[str] = None,
     ) -> Route:
         route = Route(
             id=None,
@@ -62,11 +64,15 @@ class RouteService:
             duration_minutes=duration_minutes,
             created_at=datetime.now(),
             times_ridden=0,
+            cover_image_url=cover_image_url,
         )
         return self.repository.save(route)
 
     def list_public_routes(self) -> List[Route]:
         return self.repository.get_all_public()
+
+    def list_routes_by_author(self, author_id: int) -> List[Route]:
+        return self.repository.get_all_by_author(author_id)
 
     def get_route_by_id(self, route_id: int) -> Optional[Route]:
         return self.repository.get_by_id(route_id)

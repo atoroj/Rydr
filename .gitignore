@@ -1,6 +1,26 @@
 #SQLite
 .rydr.db
 
+# Imágenes subidas por los usuarios (perfil/motos/rutas), servidas como estático
+/uploads/
+
+# macOS / editores — estado personal, no aporta nada al repo
+.DS_Store
+.vscode/
+.idea/
+
+# Pipfile vacío que apareció suelto dentro de app/ (probablemente un
+# `pipenv install` lanzado por error desde ahí) — el real vive en la raíz.
+/app/Pipfile
+
+# iOS nativo (ios-native-nav/RydrNav): el .xcodeproj lo genera XcodeGen a
+# partir de project.yml (`xcodegen generate`), no se versiona para evitar
+# el ruido/conflictos típicos de project.pbxproj.
+ios-native-nav/RydrNav.xcodeproj/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

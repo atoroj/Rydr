@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List
 from sqlalchemy.orm import Session
+from app.shared.auth_dependency import get_current_user
 from app.shared.database import get_db
 from app.users.infrastructure.sql_user_repository import SqlAlchemyUserRepository
+from app.users.infrastructure.user_model import UserModel
 from app.users.application.user_service import UserService
-from app.users.application.user_dto import UserCreate, UserResponse
+from app.users.application.user_dto import UpdateProfileRequest, UserCreate, UserResponse
 
 router = APIRouter(prefix="/users", tags=["Usuarios"])
 
@@ -31,8 +33,21 @@ def get_user_by_email(email: str, service: UserService = Depends(get_service)):
     
     if user is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, 
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Usuario no encontrado"
         )
-        
+
     return user
+
+@router.patch("/me", response_model=UserResponse)
+def update_my_profile(
+    request: UpdateProfileRequest,
+    service: UserService = Depends(get_service),
+    current_user: UserModel = Depends(get_current_user),
+):
+    return service.update_profile(
+        user_id=current_user.id,
+        username=request.username,
+        avatar_url=request.avatar_url,
+        is_private=request.is_private,
+    )

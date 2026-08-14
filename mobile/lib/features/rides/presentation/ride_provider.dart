@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
@@ -6,28 +7,69 @@ import '../data/ride_repository.dart';
 import '../../../features/auth/presentation/auth_provider.dart';
 import '../../../shared/models/ride_model.dart';
 
-// ─── Stream de posición GPS (activo solo cuando hay una ruta en curso) ───────
+// ─── Ajustes de localización con soporte de segundo plano ────────────────────
 
-final gpsPositionProvider = StreamProvider<Position>((ref) {
-  return Geolocator.getPositionStream(
-    locationSettings: const LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 10, // enviar punto cada 10 metros de desplazamiento
-    ),
-  );
-});
+/// Configuración de posición usada mientras se graba un ride: en Android
+/// levanta un foreground service (obligatorio desde Android 10+ para poder
+/// seguir leyendo el GPS con la app minimizada); en iOS activa las
+/// actualizaciones en background del `CLLocationManager`. Los permisos
+/// nativos correspondientes ya están declarados en AndroidManifest.xml e
+/// Info.plist — aquí solo se activan desde el lado Dart.
+LocationSettings _recordingLocationSettings() {
+  const accuracy = LocationAccuracy.bestForNavigation;
+  const distanceFilter = 10; // metros
+
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    return AndroidSettings(
+      accuracy: accuracy,
+      distanceFilter: distanceFilter,
+      foregroundNotificationConfig: const ForegroundNotificationConfig(
+        notificationTitle: 'Rydr',
+        notificationText: 'Grabando tu ruta…',
+        enableWakeLock: true,
+      ),
+    );
+  }
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    return AppleSettings(
+      accuracy: accuracy,
+      distanceFilter: distanceFilter,
+      pauseLocationUpdatesAutomatically: false,
+      showBackgroundLocationIndicator: true,
+      allowBackgroundLocationUpdates: true,
+    );
+  }
+  return const LocationSettings(accuracy: accuracy, distanceFilter: distanceFilter);
+}
+
+/// Pide permiso "Siempre" (Always/Background). Si el usuario solo concede
+/// "mientras se usa" no bloqueamos el ride: se graba igual, pero solo con
+/// la app en primer plano — mejor eso que no grabar nada.
+Future<void> _requestBackgroundPermission() async {
+  var permission = await Geolocator.checkPermission();
+  if (permission == LocationPermission.denied) {
+    permission = await Geolocator.requestPermission();
+  }
+  if (permission == LocationPermission.whileInUse) {
+    // En Android/iOS recientes esto reabre el diálogo del sistema para
+    // subir de "mientras se usa" a "siempre" cuando el SO lo permite.
+    await Geolocator.requestPermission();
+  }
+}
 
 // ─── Estado del ride activo ───────────────────────────────────────────────────
 
 class ActiveRideState {
-  final RideModel? ride;         // null = sin ride activo
-  final List<LatLng> path;       // puntos acumulados para dibujar en el mapa
-  final bool isSaving;           // true mientras se está guardando/finalizando
+  final RideModel? ride; // null = sin ride activo
+  final List<LatLng> path; // puntos acumulados para dibujar en el mapa
+  final bool isSaving; // true mientras se está guardando/finalizando
+  final bool isPaused; // true mientras la grabación está en pausa
 
   const ActiveRideState({
     this.ride,
     this.path = const [],
     this.isSaving = false,
+    this.isPaused = false,
   });
 
   bool get isRecording => ride != null && ride!.isActive;
@@ -36,11 +78,13 @@ class ActiveRideState {
     RideModel? ride,
     List<LatLng>? path,
     bool? isSaving,
+    bool? isPaused,
   }) =>
       ActiveRideState(
         ride: ride ?? this.ride,
         path: path ?? this.path,
         isSaving: isSaving ?? this.isSaving,
+        isPaused: isPaused ?? this.isPaused,
       );
 }
 
@@ -63,6 +107,7 @@ class RideNotifier extends Notifier<ActiveRideState> {
     if (user == null) return;
 
     state = state.copyWith(isSaving: true);
+    await _requestBackgroundPermission();
 
     final repo = ref.read(rideRepositoryProvider);
     final ride = await repo.startRide(
@@ -78,10 +123,7 @@ class RideNotifier extends Notifier<ActiveRideState> {
     final repo = ref.read(rideRepositoryProvider);
 
     _gpsSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
-      ),
+      locationSettings: _recordingLocationSettings(),
     ).listen((position) async {
       // Actualiza el path visible en el mapa
       final newPoint = LatLng(position.latitude, position.longitude);
@@ -99,6 +141,22 @@ class RideNotifier extends Notifier<ActiveRideState> {
     });
   }
 
+  /// Pausa la grabación sin finalizar el ride: cancela el stream de GPS
+  /// (y con él, en Android, el foreground service) hasta que se reanude.
+  Future<void> pauseRide() async {
+    if (!state.isRecording || state.isPaused) return;
+    await _gpsSub?.cancel();
+    _gpsSub = null;
+    state = state.copyWith(isPaused: true);
+  }
+
+  /// Reanuda la grabación tras una pausa, sobre el mismo ride.
+  void resumeRide() {
+    if (!state.isRecording || !state.isPaused) return;
+    state = state.copyWith(isPaused: false);
+    _startGpsTracking(state.ride!.id);
+  }
+
   Future<void> finishRide() async {
     if (state.ride == null) return;
     state = state.copyWith(isSaving: true);
@@ -109,7 +167,6 @@ class RideNotifier extends Notifier<ActiveRideState> {
     final repo = ref.read(rideRepositoryProvider);
     final finished = await repo.finishRide(state.ride!.id);
 
-    state = state.copyWith(ride: finished, isSaving: false);
+    state = state.copyWith(ride: finished, isSaving: false, isPaused: false);
   }
-
 }

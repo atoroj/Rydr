@@ -31,4 +31,20 @@ class AuthNotifier extends AsyncNotifier<UserModel?> {
     await repo.logout();
     state = const AsyncData(null);
   }
+
+  /// Actualiza el perfil (avatar/username/privacidad) y refresca el estado
+  /// global para que top bar, ajustes y perfil social se vean al momento.
+  Future<void> updateProfile({
+    String? username,
+    String? avatarUrl,
+    bool? isPrivate,
+  }) async {
+    final repo = ref.read(authRepositoryProvider);
+    final updated = await repo.updateProfile(
+      username: username,
+      avatarUrl: avatarUrl,
+      isPrivate: isPrivate,
+    );
+    state = AsyncData(updated);
+  }
 }

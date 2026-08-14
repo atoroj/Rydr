@@ -20,7 +20,7 @@ def get_service(db: Session = Depends(get_db)) -> RideService:
     return RideService(SqlAlchemyRideRepository(db))
 
 
-@router.post("/", response_model=RideResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RideResponse, status_code=status.HTTP_201_CREATED)
 def start_ride(request: StartRideRequest, service: RideService = Depends(get_service)):
     return service.start_ride(request.rider_id, request.motorbike_id)
 
@@ -60,3 +60,10 @@ def get_ride(ride_id: int, service: RideService = Depends(get_service)):
     if ride is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ride not found")
     return ride
+
+
+@router.delete("/{ride_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_ride(ride_id: int, service: RideService = Depends(get_service)):
+    deleted = service.delete_ride(ride_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ride not found")

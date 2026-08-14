@@ -79,3 +79,14 @@ class SqlAlchemyRideRepository(RideRepository):
         self.db.commit()
         self.db.refresh(tp_db)
         return self._to_track_point(tp_db)
+
+    def delete(self, ride_id: int) -> bool:
+        ride_db = self.db.query(RideModel).filter(RideModel.id == ride_id).first()
+        if ride_db is None:
+            return False
+        # Sin cascade configurado en la relación: borramos los track_points
+        # explícitamente primero para no dejar filas huérfanas.
+        self.db.query(TrackPointModel).filter(TrackPointModel.ride_id == ride_id).delete()
+        self.db.delete(ride_db)
+        self.db.commit()
+        return True

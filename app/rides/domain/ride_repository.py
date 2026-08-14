@@ -25,3 +25,7 @@ class RideRepository(ABC):
     @abstractmethod
     def add_track_point(self, track_point: TrackPoint) -> TrackPoint:
         pass
+
+    @abstractmethod
+    def delete(self, ride_id: int) -> bool:
+        pass

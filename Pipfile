@@ -6,12 +6,15 @@ name = "pypi"
 [packages]
 fastapi = "*"
 sqlalchemy = "*"
-uvicorn = "*"
 email-validator = "*"
 fastapi-sso = "*"
 python-jose = "*"
 pytest = "*"
 httpx = "*"
+uvicorn = "*"
+bcrypt = "*"
+python-dotenv = "*"
+python-multipart = "*"
 
 [dev-packages]
 

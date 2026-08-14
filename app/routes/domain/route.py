@@ -13,3 +13,4 @@ class Route:
     duration_minutes: int
     created_at: datetime
     times_ridden: int
+    cover_image_url: str | None = None

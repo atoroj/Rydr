@@ -25,12 +25,12 @@ def get_ride_service(db: Session = Depends(get_db)) -> RideService:
     return RideService(SqlAlchemyRideRepository(db))
 
 
-@router.get("/", response_model=List[RouteResponse])
+@router.get("", response_model=List[RouteResponse])
 def list_routes(service: RouteService = Depends(get_service)):
     return service.list_public_routes()
 
 
-@router.post("/", response_model=RouteResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=RouteResponse, status_code=status.HTTP_201_CREATED)
 def create_route(request: CreateRouteRequest, service: RouteService = Depends(get_service)):
     return service.create_route(
         name=request.name,
@@ -39,6 +39,7 @@ def create_route(request: CreateRouteRequest, service: RouteService = Depends(ge
         geojson=request.geojson,
         distance_km=request.distance_km,
         duration_minutes=request.duration_minutes,
+        cover_image_url=request.cover_image_url,
     )
 
 
@@ -52,9 +53,16 @@ def create_route_from_ride(
     if ride is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ride not found")
     try:
-        return route_service.create_route_from_ride(ride, request.name, request.description)
+        return route_service.create_route_from_ride(
+            ride, request.name, request.description, request.cover_image_url
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.get("/user/{user_id}", response_model=List[RouteResponse])
+def list_routes_by_user(user_id: int, service: RouteService = Depends(get_service)):
+    return service.list_routes_by_author(user_id)
 
 
 @router.get("/{route_id}", response_model=RouteResponse)

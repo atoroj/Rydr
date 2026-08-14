@@ -1,0 +1,63 @@
+name: RydrNav
+options:
+  bundleIdPrefix: com.rydr
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  MapboxNavigation:
+    url: https://github.com/mapbox/mapbox-navigation-ios.git
+    from: 3.0.0
+  MapboxMapsPackage:
+    url: https://github.com/mapbox/mapbox-maps-ios.git
+    exactVersion: 11.28.0
+
+targets:
+  RydrNav:
+    type: application
+    platform: iOS
+    sources:
+      - RydrNav
+    info:
+      path: RydrNav/Info.plist
+      properties:
+        CFBundleDisplayName: RydrNav
+        UILaunchScreen: {}
+        MBXAccessToken: ***REMOVED-MAPBOX-TOKEN***
+        NSLocationWhenInUseUsageDescription: RydrNav necesita tu ubicación para guiarte por la ruta.
+        NSLocationAlwaysAndWhenInUseUsageDescription: RydrNav necesita tu ubicación en segundo plano para seguir guiándote con la pantalla bloqueada.
+        UIBackgroundModes:
+          - location
+          - audio
+        # Sin UIApplicationSceneManifest a propósito: usamos el ciclo de
+        # vida clásico de una sola ventana (AppDelegate.window), no el
+        # sistema de escenas.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rydr.rydrnav
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        # Xcode 16+ compila el código de la app en un .dylib aparte para
+        # acelerar iteración/Previews. Solo funciona si lo lanza el propio
+        # Xcode (▶️); vía `xcodebuild`/`simctl` (como hacemos aquí) el
+        # binario principal no llega a cargar ese dylib y la app arranca
+        # sin ejecutar nada del código propio — pantalla negra sin crash.
+        ENABLE_DEBUG_DYLIB: "NO"
+    dependencies:
+      - package: MapboxNavigation
+        product: MapboxNavigationCore
+      - package: MapboxNavigation
+        product: MapboxNavigationUIKit
+      - package: MapboxNavigation
+        product: MapboxDirections
+      - package: MapboxMapsPackage
+        product: MapboxMaps
+
+schemes:
+  RydrNav:
+    build:
+      targets:
+        RydrNav: all
+    run:
+      config: Debug

@@ -22,6 +22,7 @@ class SqlAlchemyRouteRepository(RouteRepository):
             duration_minutes=model.duration_minutes,
             created_at=model.created_at,
             times_ridden=model.times_ridden,
+            cover_image_url=model.cover_image_url,
         )
 
     def save(self, route: Route) -> Route:
@@ -34,6 +35,7 @@ class SqlAlchemyRouteRepository(RouteRepository):
             duration_minutes=route.duration_minutes,
             created_at=route.created_at,
             times_ridden=route.times_ridden,
+            cover_image_url=route.cover_image_url,
         )
         self.db.add(route_db)
         self.db.commit()
@@ -48,6 +50,10 @@ class SqlAlchemyRouteRepository(RouteRepository):
 
     def get_all_public(self) -> List[Route]:
         routes_db = self.db.query(RouteModel).all()
+        return [self._to_route(r) for r in routes_db]
+
+    def get_all_by_author(self, author_id: int) -> List[Route]:
+        routes_db = self.db.query(RouteModel).filter(RouteModel.author_id == author_id).all()
         return [self._to_route(r) for r in routes_db]
 
     def increment_times_ridden(self, route_id: int) -> None:

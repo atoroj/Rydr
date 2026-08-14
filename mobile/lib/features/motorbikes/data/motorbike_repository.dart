@@ -27,6 +27,7 @@ class MotorbikeRepository {
     required String model,
     required int cc,
     String? alias,
+    String? photoUrl,
   }) async {
     final response = await _dio.post(ApiConstants.motorbikes, data: {
       'user_id': userId,
@@ -35,7 +36,14 @@ class MotorbikeRepository {
       'model': model,
       'cc': cc,
       if (alias != null) 'alias': alias,
+      if (photoUrl != null) 'photo_url': photoUrl,
     });
+    return MotorbikeModel.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  Future<MotorbikeModel> setCurrent(int motorbikeId) async {
+    final response =
+        await _dio.post('${ApiConstants.motorbikes}/$motorbikeId/set-current');
     return MotorbikeModel.fromJson(response.data as Map<String, dynamic>);
   }
 }
