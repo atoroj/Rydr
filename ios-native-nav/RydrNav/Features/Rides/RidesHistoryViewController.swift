@@ -16,12 +16,14 @@ final class RidesHistoryViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Mis rides"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = AppTheme.bg0
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             image: UIImage(systemName: "arrow.clockwise"), style: .plain, target: self, action: #selector(reload))
 
         tableView.dataSource = self
         tableView.delegate = self
+        tableView.backgroundColor = .clear
+        tableView.separatorColor = AppTheme.cardBorder
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: cellId)
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
@@ -69,13 +71,20 @@ extension RidesHistoryViewController: UITableViewDataSource, UITableViewDelegate
         let cell = tableView.dequeueReusableCell(withIdentifier: cellId, for: indexPath)
         var config = UIListContentConfiguration.subtitleCell()
         config.text = Self.dateFormatter.string(from: ride.startedAt)
+        config.textProperties.font = AppFont.body(15, .semibold)
+        config.textProperties.color = AppTheme.text
         let status = ride.isActive ? "En curso" : "Finalizado"
         config.secondaryText = "\(status) · \(ride.trackPoints.count) puntos"
+        config.secondaryTextProperties.font = AppFont.body(13)
+        config.secondaryTextProperties.color = AppTheme.textSecondary(0.5)
         cell.contentConfiguration = config
+        cell.backgroundColor = .clear
 
         if !ride.isActive && !ride.trackPoints.isEmpty {
             let publish = UIButton(type: .system)
             publish.setTitle("Publicar", for: .normal)
+            publish.setTitleColor(AppTheme.primary, for: .normal)
+            publish.titleLabel?.font = AppFont.body(14, .semibold)
             publish.tag = indexPath.row
             publish.addTarget(self, action: #selector(onPublishTapped(_:)), for: .touchUpInside)
             publish.sizeToFit()

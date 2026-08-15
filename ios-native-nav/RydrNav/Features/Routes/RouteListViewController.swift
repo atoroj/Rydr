@@ -12,8 +12,13 @@ final class RouteListViewController: UIViewController {
 
     private var collectionView: UICollectionView!
     private let emptyLabel = UILabel()
+    private let searchController = UISearchController(searchResultsController: nil)
     private var routes: [RouteModel] = []
+    private var filteredRoutes: [RouteModel] = []
     private let cellId = "RouteCard"
+
+    private var isSearching: Bool { !(searchController.searchBar.text ?? "").isEmpty }
+    private var visibleRoutes: [RouteModel] { isSearching ? filteredRoutes : routes }
 
     /// [showsTopBar] es `false` cuando esta pantalla se empuja desde otra
     /// (p. ej. "Ver todas mis rutas" en el perfil propio) en vez de ser la
@@ -31,11 +36,20 @@ final class RouteListViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = screenTitle
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = AppTheme.bg0
         if showsTopBar { installTopBar() }
+        setupSearch()
         setupCollectionView()
         setupEmptyLabel()
         reload()
+    }
+
+    private func setupSearch() {
+        searchController.searchResultsUpdater = self
+        searchController.obscuresBackgroundDuringPresentation = false
+        searchController.searchBar.placeholder = "Busca carreteras, puertos, zonas…"
+        navigationItem.searchController = searchController
+        navigationItem.hidesSearchBarWhenScrolling = false
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -78,7 +92,8 @@ final class RouteListViewController: UIViewController {
 
     private func setupEmptyLabel() {
         emptyLabel.text = "Todavía no hay rutas aquí"
-        emptyLabel.textColor = .secondaryLabel
+        emptyLabel.font = AppFont.body(15)
+        emptyLabel.textColor = AppTheme.textSecondary(0.5)
         emptyLabel.textAlignment = .center
         emptyLabel.isHidden = true
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -105,8 +120,7 @@ final class RouteListViewController: UIViewController {
     private func load() async {
         do {
             routes = try await fetch()
-            collectionView.reloadData()
-            emptyLabel.isHidden = !routes.isEmpty
+            applySearch()
         } catch {
             let alert = UIAlertController(
                 title: "No se pudieron cargar las rutas", message: error.localizedDescription,
@@ -115,21 +129,33 @@ final class RouteListViewController: UIViewController {
             present(alert, animated: true)
         }
     }
+
+    private func applySearch() {
+        let query = (searchController.searchBar.text ?? "").trimmingCharacters(in: .whitespaces)
+        filteredRoutes = query.isEmpty ? [] : routes.filter { $0.name.range(of: query, options: .caseInsensitive) != nil }
+        collectionView.reloadData()
+        emptyLabel.isHidden = !visibleRoutes.isEmpty
+        emptyLabel.text = isSearching ? "Ninguna ruta coincide con \"\(query)\"" : "Todavía no hay rutas aquí"
+    }
+}
+
+extension RouteListViewController: UISearchResultsUpdating {
+    func updateSearchResults(for searchController: UISearchController) { applySearch() }
 }
 
 extension RouteListViewController: UICollectionViewDataSource, UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        routes.count
+        visibleRoutes.count
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: cellId, for: indexPath) as! RouteCardCell
-        cell.configure(with: routes[indexPath.item])
+        cell.configure(with: visibleRoutes[indexPath.item])
         return cell
     }
 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         collectionView.deselectItem(at: indexPath, animated: true)
-        navigationController?.pushViewController(RouteDetailViewController(route: routes[indexPath.item]), animated: true)
+        navigationController?.pushViewController(RouteDetailViewController(route: visibleRoutes[indexPath.item]), animated: true)
     }
 }

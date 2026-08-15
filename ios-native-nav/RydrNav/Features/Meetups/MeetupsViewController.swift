@@ -7,6 +7,9 @@ final class MeetupsViewController: UIViewController {
     private enum Segment: Int { case discover, mine }
 
     private let repository = MeetupsRepository()
+    private let headerLabel = UILabel()
+    private let createButton = UIButton(type: .system)
+    private var headerRow: UIView!
     private let segmented = UISegmentedControl(items: ["Descubrir", "Mis quedadas"])
     private var collectionView: UICollectionView!
     private let emptyLabel = UILabel()
@@ -19,11 +22,9 @@ final class MeetupsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Quedadas"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = AppTheme.bg0
         installTopBar()
-        let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(onAddTapped))
-        navigationItem.rightBarButtonItems = [navigationItem.rightBarButtonItem, addItem].compactMap { $0 }
-
+        setupHeader()
         setupSegmented()
         setupCollectionView()
         setupEmptyLabel()
@@ -34,13 +35,57 @@ final class MeetupsViewController: UIViewController {
         reload()
     }
 
+    // Cabecera de la sección — espejo del `is.meets` del prototipo: título
+    // grande + píldora "Crear" (en vez del "+" de la nav bar del sistema).
+    private func setupHeader() {
+        headerLabel.text = "Quedadas"
+        headerLabel.font = AppFont.body(22, .semibold)
+        headerLabel.textColor = AppTheme.text
+
+        var config = UIButton.Configuration.plain()
+        config.title = "Crear"
+        config.image = UIImage(systemName: "plus")
+        config.imagePadding = 5
+        config.imagePlacement = .leading
+        config.baseForegroundColor = AppTheme.primary
+        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14)
+        config.attributedTitle = {
+            var t = AttributedString("Crear")
+            t.font = AppFont.body(13, .semibold)
+            return t
+        }()
+        createButton.configuration = config
+        createButton.backgroundColor = AppTheme.primary.withAlphaComponent(0.14)
+        createButton.layer.cornerRadius = 12
+        createButton.layer.borderWidth = 1
+        createButton.layer.borderColor = AppTheme.primary.withAlphaComponent(0.4).cgColor
+        createButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        createButton.addTarget(self, action: #selector(onAddTapped), for: .touchUpInside)
+
+        let row = UIStackView(arrangedSubviews: [headerLabel, createButton])
+        row.axis = .horizontal
+        row.alignment = .center
+        row.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            row.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            row.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+        ])
+        headerRow = row
+    }
+
     private func setupSegmented() {
         segmented.selectedSegmentIndex = 0
+        segmented.backgroundColor = AppTheme.bg2
+        segmented.selectedSegmentTintColor = AppTheme.bg3
+        segmented.setTitleTextAttributes([.foregroundColor: AppTheme.textSecondary(0.6)], for: .normal)
+        segmented.setTitleTextAttributes([.foregroundColor: AppTheme.text], for: .selected)
         segmented.addTarget(self, action: #selector(onSegmentChanged), for: .valueChanged)
         segmented.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(segmented)
         NSLayoutConstraint.activate([
-            segmented.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            segmented.topAnchor.constraint(equalTo: headerRow.bottomAnchor, constant: 12),
             segmented.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             segmented.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
         ])
@@ -49,11 +94,11 @@ final class MeetupsViewController: UIViewController {
     private func setupCollectionView() {
         let layout = UICollectionViewCompositionalLayout { _, _ in
             let itemSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1), heightDimension: .estimated(160))
+                widthDimension: .fractionalWidth(1), heightDimension: .estimated(230))
             let item = NSCollectionLayoutItem(layoutSize: itemSize)
             let group = NSCollectionLayoutGroup.vertical(layoutSize: itemSize, subitems: [item])
             let section = NSCollectionLayoutSection(group: group)
-            section.interGroupSpacing = 12
+            section.interGroupSpacing = 13
             section.contentInsets = NSDirectionalEdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
             return section
         }
@@ -78,7 +123,8 @@ final class MeetupsViewController: UIViewController {
     }
 
     private func setupEmptyLabel() {
-        emptyLabel.textColor = .secondaryLabel
+        emptyLabel.font = AppFont.body(15)
+        emptyLabel.textColor = AppTheme.textSecondary(0.5)
         emptyLabel.textAlignment = .center
         emptyLabel.numberOfLines = 0
         emptyLabel.isHidden = true

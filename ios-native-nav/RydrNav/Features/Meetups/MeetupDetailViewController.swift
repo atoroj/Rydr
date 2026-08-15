@@ -33,7 +33,7 @@ final class MeetupDetailViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = meetup.title
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = AppTheme.bg0
         if meetup.isOrganizer {
             navigationItem.rightBarButtonItem = UIBarButtonItem(
                 title: "Editar", style: .plain, target: self, action: #selector(onEditTapped))
@@ -55,56 +55,70 @@ final class MeetupDetailViewController: UIViewController {
 
         mapView = MapView(frame: .zero, mapInitOptions: MapInitOptions(styleURI: .outdoors))
         mapView.translatesAutoresizingMaskIntoConstraints = false
-        mapView.heightAnchor.constraint(equalToConstant: 220).isActive = true
+        mapView.layer.cornerRadius = 14
+        mapView.layer.borderWidth = 1
+        mapView.layer.borderColor = AppTheme.cardBorder.cgColor
+        mapView.clipsToBounds = true
+        mapView.heightAnchor.constraint(equalToConstant: 190).isActive = true
         drawPin()
 
         let badge = UILabel()
-        badge.text = meetup.isPrivate ? "Privada · solo Riders del organizador" : "Pública · abierta a todos"
-        badge.font = .systemFont(ofSize: 13, weight: .semibold)
-        badge.textColor = meetup.isPrivate ? .systemPurple : AppTheme.primary
+        badge.styleAsLabel(
+            meetup.isPrivate ? " Privada · solo riders del organizador " : " Pública · abierta a todos ",
+            size: 10.5, color: meetup.isPrivate ? AppTheme.accentTeal : AppTheme.primary, tracking: 0.8)
+        badge.backgroundColor = (meetup.isPrivate ? AppTheme.accentTeal : AppTheme.primary).withAlphaComponent(0.14)
+        badge.layer.cornerRadius = 6
+        badge.clipsToBounds = true
+        badge.setContentHuggingPriority(.required, for: .horizontal)
+
+        let badgeRow = UIStackView(arrangedSubviews: [badge, UIView()])
+        badgeRow.axis = .horizontal
 
         let organizerLabel = UILabel()
         organizerLabel.text = "Organiza \(meetup.organizer.username)"
-        organizerLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        organizerLabel.font = AppFont.body(15, .semibold)
+        organizerLabel.textColor = AppTheme.text
 
         let dateLabel = UILabel()
         dateLabel.text = Self.dateFormatter.string(from: meetup.scheduledAt)
-        dateLabel.font = .systemFont(ofSize: 15)
-        dateLabel.textColor = .secondaryLabel
+        dateLabel.font = AppFont.body(15)
+        dateLabel.textColor = AppTheme.textSecondary(0.6)
 
         let locationLabel = UILabel()
         locationLabel.text = meetup.locationName ?? "Punto de encuentro marcado en el mapa"
-        locationLabel.font = .systemFont(ofSize: 15)
-        locationLabel.textColor = .secondaryLabel
+        locationLabel.font = AppFont.body(15)
+        locationLabel.textColor = AppTheme.textSecondary(0.6)
         locationLabel.numberOfLines = 0
 
         let descriptionLabel = UILabel()
         descriptionLabel.text = meetup.description
-        descriptionLabel.font = .systemFont(ofSize: 15)
+        descriptionLabel.font = AppFont.body(15)
+        descriptionLabel.textColor = AppTheme.text
         descriptionLabel.numberOfLines = 0
         descriptionLabel.isHidden = meetup.description == nil || meetup.description!.isEmpty
 
         let participantsTitle = UILabel()
         participantsTitle.text = "Apuntados"
-        participantsTitle.font = .boldSystemFont(ofSize: 16)
+        participantsTitle.font = AppFont.body(16, .bold)
+        participantsTitle.textColor = AppTheme.text
 
         participantsStack.axis = .vertical
         participantsStack.spacing = 8
 
-        actionButton.titleLabel?.font = .boldSystemFont(ofSize: 17)
-        actionButton.setTitleColor(.white, for: .normal)
+        actionButton.titleLabel?.font = AppFont.body(17, .bold)
+        actionButton.setTitleColor(AppTheme.text, for: .normal)
         actionButton.layer.cornerRadius = AppTheme.gloveButtonHeight / 2
         actionButton.heightAnchor.constraint(equalToConstant: AppTheme.gloveButtonHeight).isActive = true
         actionButton.addTarget(self, action: #selector(onActionTapped), for: .touchUpInside)
         configureActionButton()
 
-        statusLabel.font = .systemFont(ofSize: 13)
-        statusLabel.textColor = .secondaryLabel
+        statusLabel.font = AppFont.body(13)
+        statusLabel.textColor = AppTheme.textSecondary(0.5)
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
 
         let stack = UIStackView(arrangedSubviews: [
-            mapView, badge, organizerLabel, dateLabel, locationLabel, descriptionLabel,
+            mapView, badgeRow, organizerLabel, dateLabel, locationLabel, descriptionLabel,
             participantsTitle, participantsStack, actionButton, statusLabel,
         ])
         stack.axis = .vertical
@@ -139,15 +153,18 @@ final class MeetupDetailViewController: UIViewController {
         } else if meetup.isJoined {
             actionButton.isHidden = false
             actionButton.setTitle("Salir de la quedada", for: .normal)
+            actionButton.setTitleColor(.white, for: .normal)
             actionButton.backgroundColor = .systemRed
         } else if meetup.isFull {
             actionButton.isHidden = false
             actionButton.setTitle("Completa", for: .normal)
-            actionButton.backgroundColor = .systemGray
+            actionButton.setTitleColor(AppTheme.textSecondary(0.6), for: .normal)
+            actionButton.backgroundColor = AppTheme.bg3
             actionButton.isEnabled = false
         } else {
             actionButton.isHidden = false
             actionButton.setTitle("Unirme", for: .normal)
+            actionButton.setTitleColor(AppTheme.bg0, for: .normal)
             actionButton.backgroundColor = AppTheme.primary
             actionButton.isEnabled = true
         }
@@ -180,7 +197,8 @@ final class MeetupDetailViewController: UIViewController {
     private func participantLabel(for participant: MeetupParticipant) -> UILabel {
         let label = UILabel()
         label.text = participant.id == meetup.organizer.id ? "\(participant.username) · organiza" : participant.username
-        label.font = .systemFont(ofSize: 15)
+        label.font = AppFont.body(15)
+        label.textColor = AppTheme.text
         return label
     }
 

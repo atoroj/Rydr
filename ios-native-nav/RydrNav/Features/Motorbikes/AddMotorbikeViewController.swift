@@ -1,136 +1,13 @@
 import PhotosUI
 import UIKit
 
-/// Espejo de lib/features/motorbikes/presentation/motorbikes_screen.dart —
-/// galería de tarjetas ("Cada tarjeta de moto debe tener una fotografía,
-/// marca, modelo y año", spec sección 3). Ya no es una pestaña del shell
-/// (su sitio lo ocupa "Quedadas") — se abre desde el perfil propio
-/// ("Ver mi garaje"), de ahí [showsTopBar].
-final class MotorbikesViewController: UIViewController {
-    private let showsTopBar: Bool
-    private var collectionView: UICollectionView!
-    private let emptyLabel = UILabel()
-    private let repository = MotorbikeRepository()
-    private var motorbikes: [MotorbikeModel] = []
-    private let cellId = "MotorbikeCard"
-
-    init(showsTopBar: Bool = true) {
-        self.showsTopBar = showsTopBar
-        super.init(nibName: nil, bundle: nil)
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) not implemented") }
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
-        title = "Mis Motos"
-        view.backgroundColor = .systemBackground
-        if showsTopBar { installTopBar() }
-        // installTopBar() ya puso el engranaje de ajustes a la derecha (si
-        // se muestra); añadimos el "+" de esta pantalla como icono aparte.
-        let addItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(onAddTapped))
-        navigationItem.rightBarButtonItems = [navigationItem.rightBarButtonItem, addItem].compactMap { $0 }
-
-        setupCollectionView()
-        setupEmptyLabel()
-    }
-
-    override func viewWillAppear(_ animated: Bool) {
-        super.viewWillAppear(animated)
-        reload()
-    }
-
-    private func setupCollectionView() {
-        let layout = UICollectionViewCompositionalLayout { _, _ in
-            let itemSize = NSCollectionLayoutSize(
-                widthDimension: .fractionalWidth(1), heightDimension: .estimated(220))
-            let item = NSCollectionLayoutItem(layoutSize: itemSize)
-            let group = NSCollectionLayoutGroup.vertical(layoutSize: itemSize, subitems: [item])
-            let section = NSCollectionLayoutSection(group: group)
-            section.interGroupSpacing = 12
-            section.contentInsets = NSDirectionalEdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
-            return section
-        }
-        collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
-        collectionView.backgroundColor = .clear
-        collectionView.register(MotorbikeCardCell.self, forCellWithReuseIdentifier: cellId)
-        collectionView.dataSource = self
-        collectionView.delegate = self
-        collectionView.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(collectionView)
-        NSLayoutConstraint.activate([
-            collectionView.topAnchor.constraint(equalTo: view.topAnchor),
-            collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
-    }
-
-    private func setupEmptyLabel() {
-        emptyLabel.text = "Aún no tienes motos registradas"
-        emptyLabel.textColor = .secondaryLabel
-        emptyLabel.textAlignment = .center
-        emptyLabel.isHidden = true
-        emptyLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(emptyLabel)
-        NSLayoutConstraint.activate([
-            emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            emptyLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
-        ])
-    }
-
-    private func reload() {
-        guard let userId = AuthManager.shared.currentUser?.id else { return }
-        Task {
-            do {
-                motorbikes = try await repository.getMotorbikes(userId: userId)
-                collectionView.reloadData()
-                emptyLabel.isHidden = !motorbikes.isEmpty
-            } catch {
-                // Silencioso: si falla, se queda la lista anterior.
-            }
-        }
-    }
-
-    private func setCurrent(_ motorbike: MotorbikeModel) {
-        Task {
-            _ = try? await repository.setCurrent(motorbikeId: motorbike.id)
-            reload()
-        }
-    }
-
-    @objc private func onAddTapped() {
-        presentForm(editing: nil)
-    }
-
-    private func presentForm(editing motorbike: MotorbikeModel?) {
-        let formVC = AddMotorbikeViewController(editing: motorbike) { [weak self] in self?.reload() }
-        present(UINavigationController(rootViewController: formVC), animated: true)
-    }
-}
-
-extension MotorbikesViewController: UICollectionViewDataSource, UICollectionViewDelegate {
-    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        motorbikes.count
-    }
-
-    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: cellId, for: indexPath) as! MotorbikeCardCell
-        let motorbike = motorbikes[indexPath.item]
-        cell.configure(with: motorbike)
-        cell.onSetCurrentTapped = { [weak self] in self?.setCurrent(motorbike) }
-        return cell
-    }
-
-    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        collectionView.deselectItem(at: indexPath, animated: true)
-        presentForm(editing: motorbikes[indexPath.item])
-    }
-}
-
 /// Formulario modal para dar de alta o editar una moto — espejo de
 /// `_AddMotorbikeSheet`. `editing != nil` cambia a modo edición: precarga
 /// los campos, guarda con PATCH en vez de POST y añade "Eliminar moto".
+/// Se abre desde el "Garaje" del perfil propio (`RiderGarageCell`), que
+/// sustituyó a la galería de tarjetas independiente que había antes — ya
+/// no hace falta una pantalla de listado aparte, el propio scroll
+/// horizontal del perfil hace ese papel (espejo del prototipo de diseño).
 final class AddMotorbikeViewController: UIViewController {
     // Nombre distinto de "editing": UIViewController ya tiene una property
     // heredada `editing: Bool` (para el botón "Edit" de las nav bars) y
@@ -163,7 +40,7 @@ final class AddMotorbikeViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = existingMotorbike == nil ? "Nueva moto" : "Editar moto"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = AppTheme.bg0
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .cancel, target: self, action: #selector(onCancel))
         navigationItem.rightBarButtonItem = UIBarButtonItem(
@@ -174,9 +51,13 @@ final class AddMotorbikeViewController: UIViewController {
 
     private func setupUI() {
         photoButton.setTitle("Añadir foto", for: .normal)
+        photoButton.setTitleColor(AppTheme.textSecondary(0.6), for: .normal)
+        photoButton.tintColor = AppTheme.textSecondary(0.6)
         photoButton.setImage(UIImage(systemName: "camera"), for: .normal)
-        photoButton.backgroundColor = .secondarySystemBackground
+        photoButton.backgroundColor = AppTheme.cardBackground
         photoButton.layer.cornerRadius = 12
+        photoButton.layer.borderWidth = 1
+        photoButton.layer.borderColor = AppTheme.cardBorder.cgColor
         photoButton.heightAnchor.constraint(equalToConstant: 120).isActive = true
         photoButton.addTarget(self, action: #selector(onPickPhoto), for: .touchUpInside)
 
@@ -184,22 +65,33 @@ final class AddMotorbikeViewController: UIViewController {
 
         brandField.placeholder = "Marca"
         brandField.borderStyle = .roundedRect
+        brandField.backgroundColor = AppTheme.bg2
+        brandField.textColor = AppTheme.text
 
         modelField.placeholder = "Modelo"
         modelField.borderStyle = .roundedRect
+        modelField.backgroundColor = AppTheme.bg2
+        modelField.textColor = AppTheme.text
 
         yearField.placeholder = "Año"
         yearField.borderStyle = .roundedRect
+        yearField.backgroundColor = AppTheme.bg2
+        yearField.textColor = AppTheme.text
         yearField.keyboardType = .numberPad
 
         ccField.placeholder = "Cilindrada (cc)"
         ccField.borderStyle = .roundedRect
+        ccField.backgroundColor = AppTheme.bg2
+        ccField.textColor = AppTheme.text
         ccField.keyboardType = .numberPad
 
         aliasField.placeholder = "Alias (opcional, p. ej. La Negra)"
         aliasField.borderStyle = .roundedRect
+        aliasField.backgroundColor = AppTheme.bg2
+        aliasField.textColor = AppTheme.text
 
         deleteButton.setTitle("Eliminar moto", for: .normal)
+        deleteButton.titleLabel?.font = AppFont.body(15, .semibold)
         deleteButton.setTitleColor(.systemRed, for: .normal)
         deleteButton.addTarget(self, action: #selector(onDeleteTapped), for: .touchUpInside)
         deleteButton.isHidden = existingMotorbike == nil
@@ -238,8 +130,8 @@ final class AddMotorbikeViewController: UIViewController {
 
     private func configureTypeMenu() {
         typeButton.contentHorizontalAlignment = .leading
-        typeButton.setTitleColor(.label, for: .normal)
-        typeButton.backgroundColor = .secondarySystemBackground
+        typeButton.setTitleColor(AppTheme.text, for: .normal)
+        typeButton.backgroundColor = AppTheme.bg2
         typeButton.layer.cornerRadius = 8
         typeButton.contentEdgeInsets = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
         typeButton.heightAnchor.constraint(equalToConstant: 48).isActive = true

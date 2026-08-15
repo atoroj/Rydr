@@ -14,6 +14,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
+        AppAppearance.configure()
+
         let window = UIWindow(frame: UIScreen.main.bounds)
         // Dark mode fijo: es el modo "ideal para conducción" que pide el
         // spec (menos deslumbramiento de noche, mejor contraste con sol

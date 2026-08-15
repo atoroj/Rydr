@@ -20,9 +20,9 @@ enum RouteMapSnapshot {
             return nil
         }
 
-        // Naranja de marca (AppTheme.primary) sin '#', tal como lo pide el
-        // overlay `path-{width}+{color}-{opacity}(...)`.
-        let overlay = "path-4+e8501a-1(\(encodedPolyline))"
+        // Naranja de marca Hi-Vis (AppTheme.primary, #FFB020) sin '#', tal
+        // como lo pide el overlay `path-{width}+{color}-{opacity}(...)`.
+        let overlay = "path-4+ffb020-1(\(encodedPolyline))"
         let urlString = "https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/\(overlay)"
             + "/auto/\(width)x\(height)@2x?padding=30&access_token=\(token)"
         return URL(string: urlString)

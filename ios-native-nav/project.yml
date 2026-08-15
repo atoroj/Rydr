@@ -30,14 +30,44 @@ targets:
         UIBackgroundModes:
           - location
           - audio
+        # Un iPhone físico habla con el backend de desarrollo por HTTP
+        # plano a una IP de la red local (ver APIConstants.swift) — ATS
+        # bloquea eso por defecto salvo loopback. `NSAllowsLocalNetworking`
+        # solo abre la excepción para direcciones de red local/loopback,
+        # no para internet en general (a diferencia de
+        # `NSAllowsArbitraryLoads`). Y sin la descripción de uso, iOS 14+
+        # puede negar en silencio el acceso a la red local sin ni
+        # siquiera preguntar.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: RydrNav necesita acceder a tu red local para hablar con el backend de desarrollo mientras pruebas en el teléfono.
         # Sin UIApplicationSceneManifest a propósito: usamos el ciclo de
         # vida clásico de una sola ventana (AppDelegate.window), no el
         # sistema de escenas.
+        # Fuentes custom del rediseño (Resources/Fonts) — sin esto iOS las
+        # ignora en silencio y cae a San Francisco.
+        UIAppFonts:
+          - Barlow-Regular.ttf
+          - Barlow-Medium.ttf
+          - Barlow-SemiBold.ttf
+          - Barlow-Bold.ttf
+          - BarlowCondensed-SemiBold.ttf
+          - BarlowCondensed-Bold.ttf
+          - BarlowSemiCondensed-Medium.ttf
+          - BarlowSemiCondensed-SemiBold.ttf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rydr.rydrnav
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Sin esto el proyecto nacía en firma manual sin ningún equipo
+        # asignado — Xcode ni deja elegir un iPhone físico como destino
+        # hasta que entras a Signing & Capabilities y lo arreglas a mano.
+        # Con Automatic, solo hace falta elegir el equipo (tu Apple ID)
+        # una vez ahí; XcodeGen no puede rellenar DEVELOPMENT_TEAM por ti
+        # porque es distinto para cada cuenta.
+        CODE_SIGN_STYLE: Automatic
         # Xcode 16+ compila el código de la app en un .dylib aparte para
         # acelerar iteración/Previews. Solo funciona si lo lanza el propio
         # Xcode (▶️); vía `xcodebuild`/`simctl` (como hacemos aquí) el

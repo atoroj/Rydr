@@ -15,7 +15,7 @@ final class SettingsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Ajustes"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = AppTheme.bg0
         setupUI()
         populate()
     }
@@ -32,15 +32,16 @@ final class SettingsViewController: UIViewController {
 
         let changePhotoLabel = UILabel()
         changePhotoLabel.text = "Toca para cambiar la foto"
-        changePhotoLabel.font = .systemFont(ofSize: 12)
-        changePhotoLabel.textColor = .secondaryLabel
+        changePhotoLabel.font = AppFont.body(12)
+        changePhotoLabel.textColor = AppTheme.textSecondary(0.5)
 
-        usernameLabel.font = .boldSystemFont(ofSize: 20)
+        usernameLabel.font = AppFont.body(20, .bold)
+        usernameLabel.textColor = AppTheme.text
         usernameLabel.isUserInteractionEnabled = true
         usernameLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(onRenameTapped)))
 
-        emailLabel.font = .systemFont(ofSize: 14)
-        emailLabel.textColor = .secondaryLabel
+        emailLabel.font = AppFont.body(14)
+        emailLabel.textColor = AppTheme.textSecondary(0.5)
 
         let privacyRow = tappableSwitchRow(
             icon: "lock", title: "Cuenta privada",
@@ -97,23 +98,24 @@ final class SettingsViewController: UIViewController {
         config.titleAlignment = .leading
         button.configuration = config
         button.contentHorizontalAlignment = .leading
-        button.tintColor = destructive ? .systemRed : .label
+        button.tintColor = destructive ? .systemRed : AppTheme.text
         button.addTarget(self, action: action, for: .touchUpInside)
         return button
     }
 
     private func tappableSwitchRow(icon: String, title: String, subtitle: String, control: UISwitch) -> UIView {
         let iconView = UIImageView(image: UIImage(systemName: icon))
-        iconView.tintColor = .label
+        iconView.tintColor = AppTheme.text
 
         let titleLabel = UILabel()
         titleLabel.text = title
-        titleLabel.font = .systemFont(ofSize: 16)
+        titleLabel.font = AppFont.body(16)
+        titleLabel.textColor = AppTheme.text
 
         let subtitleLabel = UILabel()
         subtitleLabel.text = subtitle
-        subtitleLabel.font = .systemFont(ofSize: 12)
-        subtitleLabel.textColor = .secondaryLabel
+        subtitleLabel.font = AppFont.body(12)
+        subtitleLabel.textColor = AppTheme.textSecondary(0.5)
         subtitleLabel.numberOfLines = 0
 
         let textStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
@@ -135,7 +137,7 @@ final class SettingsViewController: UIViewController {
 
     private func divider() -> UIView {
         let v = UIView()
-        v.backgroundColor = .separator
+        v.backgroundColor = AppTheme.cardBorder
         v.heightAnchor.constraint(equalToConstant: 1).isActive = true
         return v
     }

@@ -23,10 +23,34 @@ private func applyRydrBrand(for traitCollection: UITraitCollection) {
     ResumeButton.appearance(for: traitCollection).tintColor = brand
     BackButton.appearance(for: traitCollection).tintColor = brand
 
-    // Icono de flecha de giro del banner superior, la tarjeta de
-    // instrucciones y la lista de pasos.
+    // Banner superior de instrucciones: fondo ámbar sólido a todo lo
+    // ancho, como el "modo en marcha" de Claude Design (exploración
+    // 1f-C, "banner de giro naranja completo") — el mismo naranja de
+    // marca que el botón "Registrar" y la línea de la ruta, no un
+    // acento aislado sobre el fondo oscuro/claro por defecto del SDK.
+    // `TopBannerView`/`TopPaddingView` son el relleno de la zona segura
+    // de arriba (notch/isla); sin colorearlos también queda una costura
+    // oscura entre el borde de la pantalla y el propio banner.
+    TopBannerView.appearance(for: traitCollection).backgroundColor = brand
+    TopPaddingView.appearance(for: traitCollection).backgroundColor = brand
+    InstructionsBannerView.appearance(for: traitCollection).backgroundColor = brand
+
+    // Con el banner ahora en ámbar, el texto y el icono pasan a oscuro
+    // (antes eran claros, pensados para un fondo oscuro) para mantener
+    // el contraste — igual que en el mock, donde la flecha y las cifras
+    // van en `#0B0C0E` sobre el naranja.
     ManeuverView.appearance(for: traitCollection, whenContainedInInstancesOf: [InstructionsBannerView.self])
-        .primaryColor = brand
+        .primaryColor = AppTheme.bg0
+    DistanceLabel.appearance(for: traitCollection, whenContainedInInstancesOf: [InstructionsBannerView.self])
+        .valueTextColor = AppTheme.bg0
+    DistanceLabel.appearance(for: traitCollection, whenContainedInInstancesOf: [InstructionsBannerView.self])
+        .unitTextColor = AppTheme.bg0.withAlphaComponent(0.7)
+    PrimaryLabel.appearance(for: traitCollection).normalTextColor = AppTheme.bg0
+    SecondaryLabel.appearance(for: traitCollection).normalTextColor = AppTheme.bg0.withAlphaComponent(0.7)
+
+    // La flecha de giro de la tarjeta de instrucciones (vista de pasos)
+    // y del banner "Después: X" sigue sobre fondo oscuro, así que ahí
+    // se queda en ámbar.
     ManeuverView.appearance(for: traitCollection, whenContainedInInstancesOf: [InstructionsCardView.self])
         .primaryColor = brand
     ManeuverView.appearance(for: traitCollection, whenContainedInInstancesOf: [NextBannerView.self])
@@ -34,11 +58,7 @@ private func applyRydrBrand(for traitCollection: UITraitCollection) {
     ManeuverView.appearance(for: traitCollection, whenContainedInInstancesOf: [StepInstructionsView.self])
         .primaryColor = brand
 
-    // Número de distancia del banner superior ("50 m").
-    DistanceLabel.appearance(for: traitCollection, whenContainedInInstancesOf: [InstructionsBannerView.self])
-        .valueTextColor = brand
-
-    // "6 min" de tiempo restante en el banner inferior.
+    // "6 min" de tiempo restante en el banner inferior (que sigue oscuro).
     TimeRemainingLabel.appearance(for: traitCollection).normalTextColor = brand
 }
 

@@ -23,7 +23,7 @@ final class RidersViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Riders"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = AppTheme.bg0
         installTopBar()
         setupSearch()
         setupSegmented()
@@ -45,6 +45,10 @@ final class RidersViewController: UIViewController {
 
     private func setupSegmented() {
         segmented.selectedSegmentIndex = 0
+        segmented.backgroundColor = AppTheme.bg2
+        segmented.selectedSegmentTintColor = AppTheme.bg3
+        segmented.setTitleTextAttributes([.foregroundColor: AppTheme.textSecondary(0.6)], for: .normal)
+        segmented.setTitleTextAttributes([.foregroundColor: AppTheme.text], for: .selected)
         segmented.addTarget(self, action: #selector(onSegmentChanged), for: .valueChanged)
         segmented.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(segmented)
@@ -57,9 +61,14 @@ final class RidersViewController: UIViewController {
 
     private func setupTableView() {
         tableView.register(RiderRowCell.self, forCellReuseIdentifier: cellId)
+        tableView.backgroundColor = .clear
+        // Cada fila es su propia tarjeta con borde (ver RiderRowCell) — el
+        // separador de línea del sistema sobraría.
+        tableView.separatorStyle = .none
         tableView.dataSource = self
         tableView.delegate = self
-        tableView.rowHeight = 64
+        tableView.rowHeight = UITableView.automaticDimension
+        tableView.estimatedRowHeight = 75
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
         NSLayoutConstraint.activate([

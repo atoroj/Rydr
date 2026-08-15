@@ -22,5 +22,9 @@ python-multipart = "*"
 python_version = "3.14"
 
 [scripts]
-dev = "uvicorn app.main:app --reload"
+# --host 0.0.0.0: por defecto uvicorn solo escucha en 127.0.0.1
+# (loopback), así que un iPhone físico en la misma red no podía llegar
+# al backend aunque apuntara a la IP del Mac — el puerto ni siquiera
+# aceptaba la conexión desde fuera del propio Mac.
+dev = "uvicorn app.main:app --reload --host 0.0.0.0"
 test = "pytest -v"

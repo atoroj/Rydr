@@ -22,10 +22,28 @@
 	<string>1</string>
 	<key>MBXAccessToken</key>
 	<string>***REMOVED-MAPBOX-TOKEN***</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>RydrNav necesita acceder a tu red local para hablar con el backend de desarrollo mientras pruebas en el teléfono.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>RydrNav necesita tu ubicación en segundo plano para seguir guiándote con la pantalla bloqueada.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>RydrNav necesita tu ubicación para guiarte por la ruta.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>Barlow-Regular.ttf</string>
+		<string>Barlow-Medium.ttf</string>
+		<string>Barlow-SemiBold.ttf</string>
+		<string>Barlow-Bold.ttf</string>
+		<string>BarlowCondensed-SemiBold.ttf</string>
+		<string>BarlowCondensed-Bold.ttf</string>
+		<string>BarlowSemiCondensed-Medium.ttf</string>
+		<string>BarlowSemiCondensed-SemiBold.ttf</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

@@ -1,23 +1,17 @@
 import UIKit
 
-/// Cabecera del perfil social: foto grande, nombre, "Moto actual" (con
-/// imagen) y el botón de seguir/pendiente/siguiendo — espejo de "Perfil
-/// Social" (spec sección 3). Para cuentas privadas que no sigues, solo
-/// muestra esto y un aviso, sin el feed de rutas.
+/// Cabecera del perfil social — espejo de la cabecera `is.profile` del
+/// prototipo: avatar grande con anillo ámbar, nombre + "handle", grid de
+/// cifras y el botón de seguir/pendiente/siguiendo. El garaje y "últimas
+/// rutas" viven en celdas propias más abajo (`RiderGarageCell`,
+/// `RiderRouteRowCell`), no aquí.
 final class RiderProfileHeaderCell: UICollectionViewCell {
     var onActionTapped: (() -> Void)?
-    var onViewAllRoutesTapped: (() -> Void)?
-    var onViewGarageTapped: (() -> Void)?
 
     private let avatarView = RemoteImageView()
     private let nameLabel = UILabel()
-    private let viewAllRoutesButton = UIButton(type: .system)
-    private let viewGarageButton = UIButton(type: .system)
-
-    private let motorbikeCard = UIView()
-    private let motorbikeImage = RemoteImageView()
-    private let motorbikeLabel = UILabel()
-
+    private let handleLabel = UILabel()
+    private let statsStack = UIStackView()
     private let actionButton = UIButton(type: .system)
     private let privateNoticeLabel = UILabel()
 
@@ -29,108 +23,66 @@ final class RiderProfileHeaderCell: UICollectionViewCell {
     required init?(coder: NSCoder) { fatalError("init(coder:) not implemented") }
 
     private func setup() {
-        avatarView.layer.cornerRadius = 48
+        avatarView.layer.cornerRadius = 37
+        avatarView.layer.borderWidth = 2
+        avatarView.layer.borderColor = AppTheme.primary.withAlphaComponent(0.5).cgColor
         avatarView.translatesAutoresizingMaskIntoConstraints = false
-        avatarView.widthAnchor.constraint(equalToConstant: 96).isActive = true
-        avatarView.heightAnchor.constraint(equalToConstant: 96).isActive = true
+        avatarView.widthAnchor.constraint(equalToConstant: 74).isActive = true
+        avatarView.heightAnchor.constraint(equalToConstant: 74).isActive = true
 
-        nameLabel.font = .boldSystemFont(ofSize: 22)
-        nameLabel.textAlignment = .center
+        nameLabel.font = AppFont.body(23, .semibold)
+        nameLabel.textColor = AppTheme.text
 
-        motorbikeImage.layer.cornerRadius = 12
-        motorbikeImage.translatesAutoresizingMaskIntoConstraints = false
-        motorbikeImage.widthAnchor.constraint(equalToConstant: 56).isActive = true
-        motorbikeImage.heightAnchor.constraint(equalToConstant: 56).isActive = true
+        handleLabel.styleAsLabel(size: 12, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.9)
 
-        motorbikeLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        let nameStack = UIStackView(arrangedSubviews: [nameLabel, handleLabel])
+        nameStack.axis = .vertical
+        nameStack.spacing = 2
 
-        let motorbikeCaption = UILabel()
-        motorbikeCaption.text = "Moto actual"
-        motorbikeCaption.font = .systemFont(ofSize: 11)
-        motorbikeCaption.textColor = .secondaryLabel
+        let identityRow = UIStackView(arrangedSubviews: [avatarView, nameStack])
+        identityRow.axis = .horizontal
+        identityRow.spacing = 14
+        identityRow.alignment = .center
 
-        let motorbikeTextStack = UIStackView(arrangedSubviews: [motorbikeCaption, motorbikeLabel])
-        motorbikeTextStack.axis = .vertical
-        motorbikeTextStack.spacing = 2
+        statsStack.axis = .horizontal
+        statsStack.spacing = 10
+        statsStack.distribution = .fillEqually
 
-        let motorbikeRow = UIStackView(arrangedSubviews: [motorbikeImage, motorbikeTextStack])
-        motorbikeRow.axis = .horizontal
-        motorbikeRow.spacing = 12
-        motorbikeRow.alignment = .center
-        motorbikeRow.translatesAutoresizingMaskIntoConstraints = false
-
-        motorbikeCard.backgroundColor = .secondarySystemBackground
-        motorbikeCard.layer.cornerRadius = 14
-        motorbikeCard.translatesAutoresizingMaskIntoConstraints = false
-        motorbikeCard.addSubview(motorbikeRow)
-        NSLayoutConstraint.activate([
-            motorbikeRow.topAnchor.constraint(equalTo: motorbikeCard.topAnchor, constant: 10),
-            motorbikeRow.bottomAnchor.constraint(equalTo: motorbikeCard.bottomAnchor, constant: -10),
-            motorbikeRow.leadingAnchor.constraint(equalTo: motorbikeCard.leadingAnchor, constant: 12),
-            motorbikeRow.trailingAnchor.constraint(equalTo: motorbikeCard.trailingAnchor, constant: -12),
-        ])
-
-        actionButton.titleLabel?.font = .boldSystemFont(ofSize: 15)
-        actionButton.backgroundColor = AppTheme.primary
-        actionButton.setTitleColor(.white, for: .normal)
-        actionButton.layer.cornerRadius = 10
-        actionButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
+        actionButton.titleLabel?.font = AppFont.body(15, .bold)
+        actionButton.layer.cornerRadius = 15
+        actionButton.heightAnchor.constraint(equalToConstant: 54).isActive = true
         actionButton.addTarget(self, action: #selector(onTapAction), for: .touchUpInside)
 
         privateNoticeLabel.text = "Cuenta privada. Solicita seguir para ver sus rutas."
-        privateNoticeLabel.font = .systemFont(ofSize: 13)
-        privateNoticeLabel.textColor = .secondaryLabel
+        privateNoticeLabel.font = AppFont.body(13)
+        privateNoticeLabel.textColor = AppTheme.textSecondary(0.5)
         privateNoticeLabel.textAlignment = .center
         privateNoticeLabel.numberOfLines = 0
 
-        // Solo en el perfil propio: "Mis Rutas" ya no es una pestaña, vive
-        // aquí — ver sección de abajo son solo las últimas, este botón
-        // lleva al listado completo.
-        viewAllRoutesButton.setTitle("Ver todas mis rutas →", for: .normal)
-        viewAllRoutesButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
-        viewAllRoutesButton.addTarget(self, action: #selector(onTapViewAllRoutes), for: .touchUpInside)
-        viewAllRoutesButton.isHidden = true
-
-        viewGarageButton.setTitle("Ver mi garaje →", for: .normal)
-        viewGarageButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .semibold)
-        viewGarageButton.addTarget(self, action: #selector(onTapViewGarage), for: .touchUpInside)
-        viewGarageButton.isHidden = true
-
-        let stack = UIStackView(arrangedSubviews: [
-            avatarView, nameLabel, motorbikeCard, actionButton,
-            viewGarageButton, viewAllRoutesButton, privateNoticeLabel,
-        ])
+        let stack = UIStackView(arrangedSubviews: [identityRow, statsStack, actionButton, privateNoticeLabel])
         stack.axis = .vertical
-        stack.alignment = .center
-        stack.spacing = 12
-        stack.setCustomSpacing(20, after: nameLabel)
+        stack.spacing = 14
+        stack.setCustomSpacing(16, after: identityRow)
         stack.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(stack)
 
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 24),
-            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -16),
-            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            motorbikeCard.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            actionButton.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            stack.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4),
+            stack.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
+            stack.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
         ])
     }
 
     func configure(with profile: RiderProfile) {
         nameLabel.text = profile.username
+        handleLabel.styleAsLabel("@\(profile.username)", size: 12, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.9)
         avatarView.load(urlString: profile.avatarUrl, placeholder: UIImage(systemName: "person.circle.fill"))
 
-        if let motorbike = profile.currentMotorbike {
-            motorbikeCard.isHidden = false
-            motorbikeLabel.text = motorbike.displayName + (motorbike.year.map { " · \($0)" } ?? "")
-            motorbikeImage.load(urlString: motorbike.photoUrl, placeholder: UIImage(systemName: "bicycle"))
-        } else {
-            motorbikeCard.isHidden = true
-        }
-
-        viewAllRoutesButton.isHidden = profile.followStatus != "self"
-        viewGarageButton.isHidden = profile.followStatus != "self"
+        statsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        let totalKm = profile.recentRoutes.reduce(0) { $0 + $1.distanceKm }
+        statsStack.addArrangedSubview(statCard(value: "\(profile.recentRoutes.count)", label: profile.recentRoutes.count == 1 ? "Ruta" : "Rutas"))
+        statsStack.addArrangedSubview(statCard(value: String(format: "%.0f", totalKm), label: "Km"))
 
         switch profile.followStatus {
         case "self":
@@ -138,21 +90,50 @@ final class RiderProfileHeaderCell: UICollectionViewCell {
         case "following":
             actionButton.isHidden = false
             actionButton.setTitle("Siguiendo · toca para dejar de seguir", for: .normal)
-            actionButton.backgroundColor = .systemGray
+            actionButton.setTitleColor(AppTheme.text, for: .normal)
+            actionButton.backgroundColor = AppTheme.bg3
         case "pending":
             actionButton.isHidden = false
             actionButton.setTitle("Solicitud pendiente", for: .normal)
-            actionButton.backgroundColor = .systemGray
+            actionButton.setTitleColor(AppTheme.textSecondary(0.6), for: .normal)
+            actionButton.backgroundColor = AppTheme.bg3
         default:
             actionButton.isHidden = false
             actionButton.setTitle(profile.isPrivate ? "Solicitar seguir" : "Seguir", for: .normal)
+            actionButton.setTitleColor(AppTheme.bg0, for: .normal)
             actionButton.backgroundColor = AppTheme.primary
         }
 
         privateNoticeLabel.isHidden = profile.isVisible
     }
 
+    private func statCard(value: String, label: String) -> UIView {
+        let container = UIView()
+        container.backgroundColor = AppTheme.cardBackground
+        container.layer.cornerRadius = 12
+        container.layer.borderWidth = 1
+        container.layer.borderColor = AppTheme.cardBorder.cgColor
+
+        let valueLabel = UILabel()
+        valueLabel.attributedText = NSAttributedString(string: value, attributes: [
+            .font: AppFont.data(25), .foregroundColor: AppTheme.text,
+        ])
+        let captionLabel = UILabel()
+        captionLabel.styleAsLabel(label, size: 10, color: AppTheme.textSecondary(0.42), tracking: 1.2)
+
+        let stack = UIStackView(arrangedSubviews: [valueLabel, captionLabel])
+        stack.axis = .vertical
+        stack.spacing = 3
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 11),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -11),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -8),
+        ])
+        return container
+    }
+
     @objc private func onTapAction() { onActionTapped?() }
-    @objc private func onTapViewAllRoutes() { onViewAllRoutesTapped?() }
-    @objc private func onTapViewGarage() { onViewGarageTapped?() }
 }

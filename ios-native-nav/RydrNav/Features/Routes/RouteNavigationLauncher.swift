@@ -214,7 +214,13 @@ final class RouteNavigationLauncher: NSObject {
             mapboxNavigation: navigationProvider.mapboxNavigation,
             voiceController: navigationProvider.routeVoiceController,
             eventsManager: navigationProvider.eventsManager(),
-            styles: [RydrDayStyle(), RydrNightStyle()],
+            // Solo el estilo noche: el resto de la app nunca cambia a un
+            // tema claro (`overrideUserInterfaceStyle = .dark` en
+            // `AppDelegate`), así que si aquí se dejaban los dos
+            // (`RydrDayStyle` + `RydrNightStyle`) el SDK podía cambiar de
+            // uno a otro solo según la hora del día — un salto de look
+            // que no pasa en ninguna otra pantalla de Rydr.
+            styles: [RydrNightStyle()],
             navigationMapView: brandedMapView
         )
         let navigationViewController = NavigationViewController(

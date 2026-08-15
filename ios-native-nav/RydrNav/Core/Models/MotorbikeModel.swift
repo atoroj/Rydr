@@ -20,6 +20,27 @@ struct MotorbikeModel: Codable, Equatable, Identifiable {
         case isCurrent = "is_current"
     }
 
+    /// Definir `init(from:)` abajo desactiva el memberwise init automático
+    /// de Swift, así que hace falta este a mano — lo usa, por ejemplo,
+    /// `RiderProfileViewController` para envolver el `MotorbikeSummary`
+    /// (todo lo que expone el perfil de otro rider sobre su moto actual)
+    /// en un `MotorbikeModel` completo y reutilizar `RiderGarageCell`.
+    init(
+        id: Int, userId: Int, type: String, brand: String, model: String, cc: Int,
+        alias: String?, year: Int?, photoUrl: String?, isCurrent: Bool
+    ) {
+        self.id = id
+        self.userId = userId
+        self.type = type
+        self.brand = brand
+        self.model = model
+        self.cc = cc
+        self.alias = alias
+        self.year = year
+        self.photoUrl = photoUrl
+        self.isCurrent = isCurrent
+    }
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(Int.self, forKey: .id)

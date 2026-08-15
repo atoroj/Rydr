@@ -26,7 +26,7 @@ final class RoutePreviewViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = AppTheme.bg0
         setupMap()
         setupCloseButton()
         setupBottomCard()
@@ -69,30 +69,32 @@ final class RoutePreviewViewController: UIViewController {
 
     private func setupBottomCard() {
         let card = UIView()
-        card.backgroundColor = .systemBackground
+        card.backgroundColor = AppTheme.cardBackground
         card.layer.cornerRadius = 16
+        card.layer.borderWidth = 1
+        card.layer.borderColor = AppTheme.cardBorder.cgColor
         card.layer.shadowColor = UIColor.black.cgColor
-        card.layer.shadowOpacity = 0.2
+        card.layer.shadowOpacity = 0.3
         card.layer.shadowRadius = 8
         card.layer.shadowOffset = CGSize(width: 0, height: -2)
         card.translatesAutoresizingMaskIntoConstraints = false
 
         statsLabel.text = "Calculando ruta…"
-        statsLabel.font = .systemFont(ofSize: 14)
-        statsLabel.textColor = .secondaryLabel
+        statsLabel.font = AppFont.body(14)
+        statsLabel.textColor = AppTheme.textSecondary(0.6)
         statsLabel.textAlignment = .center
         statsLabel.numberOfLines = 2
 
         startButton.setTitle("Iniciar", for: .normal)
-        startButton.titleLabel?.font = .boldSystemFont(ofSize: 17)
-        startButton.setTitleColor(.white, for: .normal)
+        startButton.titleLabel?.font = AppFont.body(17, .bold)
+        startButton.setTitleColor(AppTheme.bg0, for: .normal)
         startButton.backgroundColor = AppTheme.primary
         startButton.layer.cornerRadius = AppTheme.gloveButtonHeight / 2
         startButton.heightAnchor.constraint(equalToConstant: AppTheme.gloveButtonHeight).isActive = true
         startButton.addTarget(self, action: #selector(onStartTapped), for: .touchUpInside)
 
-        statusLabel.font = .systemFont(ofSize: 13)
-        statusLabel.textColor = .secondaryLabel
+        statusLabel.font = AppFont.body(13)
+        statusLabel.textColor = AppTheme.textSecondary(0.5)
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
 
@@ -135,7 +137,7 @@ final class RoutePreviewViewController: UIViewController {
            let approach = await RouteNavigationLauncher.shared.previewApproach(to: routeStart)
         {
             var approachLine = PolylineAnnotation(lineCoordinates: approach.coordinates)
-            approachLine.lineColor = StyleColor(.systemBlue)
+            approachLine.lineColor = StyleColor(AppTheme.accentTeal)
             approachLine.lineWidth = 4
             polylines.append(approachLine)
             boundsCoordinates += approach.coordinates

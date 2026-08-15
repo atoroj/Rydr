@@ -14,7 +14,7 @@ final class FeedViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Actividad"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = AppTheme.bg0
         installTopBar()
         setupCollectionView()
         setupEmptyLabel()
@@ -58,7 +58,8 @@ final class FeedViewController: UIViewController {
 
     private func setupEmptyLabel() {
         emptyLabel.text = "Sigue a otros riders para ver aquí sus rutas"
-        emptyLabel.textColor = .secondaryLabel
+        emptyLabel.font = AppFont.body(15)
+        emptyLabel.textColor = AppTheme.textSecondary(0.5)
         emptyLabel.textAlignment = .center
         emptyLabel.numberOfLines = 0
         emptyLabel.isHidden = true
@@ -102,12 +103,15 @@ extension FeedViewController: UICollectionViewDataSource, UICollectionViewDelega
         cell.onAuthorTapped = { [weak self] in
             self?.navigationController?.pushViewController(RiderProfileViewController(userId: item.author.id), animated: true)
         }
+        // La tarjeta lleva su propio UIButton de fondo (para que el de
+        // autor, encima, pueda robarle el toque en la cabecera) — por eso
+        // la navegación va por aquí y no por didSelectItemAt, que no llega
+        // a dispararse cuando el toque lo recoge un UIButton.
+        cell.onOpenTapped = { [weak self] in self?.openRoute(item) }
         return cell
     }
 
-    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        collectionView.deselectItem(at: indexPath, animated: true)
-        let item = items[indexPath.item]
+    private func openRoute(_ item: FeedItem) {
         // FeedItem trae un resumen de la ruta (sin descripción, que el feed
         // no necesita); se arma un RouteModel mínimo para reutilizar
         // RouteDetailViewController tal cual.

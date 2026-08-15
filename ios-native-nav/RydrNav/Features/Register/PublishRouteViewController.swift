@@ -29,7 +29,7 @@ final class PublishRouteViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "¡Ruta completada!"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = AppTheme.bg0
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             title: "Ahora no", style: .plain, target: self, action: #selector(onCancel))
         navigationItem.rightBarButtonItem = UIBarButtonItem(
@@ -40,25 +40,35 @@ final class PublishRouteViewController: UIViewController {
     private func setupUI() {
         let infoLabel = UILabel()
         infoLabel.text = "\(pointCount) puntos GPS grabados. ¿Quieres publicarla para otros moteros?"
+        infoLabel.font = AppFont.body(14)
         infoLabel.numberOfLines = 0
-        infoLabel.textColor = .secondaryLabel
+        infoLabel.textColor = AppTheme.textSecondary(0.6)
         infoLabel.textAlignment = .center
 
         photoButton.setTitle("Foto de portada (opcional)", for: .normal)
+        photoButton.setTitleColor(AppTheme.textSecondary(0.6), for: .normal)
+        photoButton.tintColor = AppTheme.textSecondary(0.6)
         photoButton.setImage(UIImage(systemName: "photo.badge.plus"), for: .normal)
-        photoButton.backgroundColor = .secondarySystemBackground
+        photoButton.backgroundColor = AppTheme.cardBackground
         photoButton.layer.cornerRadius = 12
+        photoButton.layer.borderWidth = 1
+        photoButton.layer.borderColor = AppTheme.cardBorder.cgColor
         photoButton.contentVerticalAlignment = .center
         photoButton.heightAnchor.constraint(equalToConstant: 120).isActive = true
         photoButton.addTarget(self, action: #selector(onPickPhoto), for: .touchUpInside)
 
         nameField.placeholder = "Nombre de la ruta *"
         nameField.borderStyle = .roundedRect
+        nameField.backgroundColor = AppTheme.bg2
+        nameField.textColor = AppTheme.text
 
         descriptionField.placeholder = "Descripción (opcional)"
         descriptionField.borderStyle = .roundedRect
+        descriptionField.backgroundColor = AppTheme.bg2
+        descriptionField.textColor = AppTheme.text
 
-        statusLabel.textColor = .secondaryLabel
+        statusLabel.font = AppFont.body(13)
+        statusLabel.textColor = AppTheme.textSecondary(0.5)
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
 

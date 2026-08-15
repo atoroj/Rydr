@@ -1,14 +1,17 @@
 import UIKit
 
-/// Fila de la lista de Riders: avatar, nombre, moto actual y una acción a
-/// la derecha (Seguir/Pendiente/Siguiendo, o Aceptar+Rechazar para
-/// solicitudes). Espejo del listado "Amigos" del spec (sección 3).
+/// Fila de la lista de Riders — espejo de la fila `is.riders` del
+/// prototipo: cada fila es su propia tarjeta (no un simple renglón de
+/// tabla), con avatar, nombre + candado si es privada, moto actual y un
+/// botón de acción en píldora a la derecha.
 final class RiderRowCell: UITableViewCell {
     var onPrimaryTapped: (() -> Void)?
     var onRejectTapped: (() -> Void)?
 
+    private let card = UIView()
     private let avatarView = RemoteImageView()
     private let nameLabel = UILabel()
+    private let lockIcon = UIImageView(image: UIImage(systemName: "lock.fill"))
     private let motorbikeLabel = UILabel()
     private let primaryButton = UIButton(type: .system)
     private let rejectButton = UIButton(type: .system)
@@ -21,24 +24,62 @@ final class RiderRowCell: UITableViewCell {
     required init?(coder: NSCoder) { fatalError("init(coder:) not implemented") }
 
     private func setup() {
-        avatarView.layer.cornerRadius = 20
+        backgroundColor = .clear
+        contentView.backgroundColor = .clear
+        selectionStyle = .none
+
+        card.backgroundColor = AppTheme.cardBackground
+        card.layer.cornerRadius = 14
+        card.layer.borderWidth = 1
+        card.layer.borderColor = AppTheme.cardBorder.cgColor
+        card.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(card)
+        NSLayoutConstraint.activate([
+            card.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 4.5),
+            card.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -4.5),
+            card.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+        ])
+
+        avatarView.layer.cornerRadius = 22
         avatarView.translatesAutoresizingMaskIntoConstraints = false
-        avatarView.widthAnchor.constraint(equalToConstant: 40).isActive = true
-        avatarView.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        avatarView.widthAnchor.constraint(equalToConstant: 44).isActive = true
+        avatarView.heightAnchor.constraint(equalToConstant: 44).isActive = true
 
-        nameLabel.font = .boldSystemFont(ofSize: 15)
-        motorbikeLabel.font = .systemFont(ofSize: 13)
-        motorbikeLabel.textColor = .secondaryLabel
+        nameLabel.font = AppFont.body(15, .semibold)
+        nameLabel.textColor = AppTheme.text
 
-        let textStack = UIStackView(arrangedSubviews: [nameLabel, motorbikeLabel])
+        lockIcon.tintColor = AppTheme.textSecondary(0.5)
+        lockIcon.contentMode = .scaleAspectFit
+        lockIcon.translatesAutoresizingMaskIntoConstraints = false
+        lockIcon.widthAnchor.constraint(equalToConstant: 12).isActive = true
+
+        let nameRow = UIStackView(arrangedSubviews: [nameLabel, lockIcon])
+        nameRow.axis = .horizontal
+        nameRow.spacing = 6
+        nameRow.alignment = .center
+
+        motorbikeLabel.styleAsLabel(size: 11.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.6)
+
+        let textStack = UIStackView(arrangedSubviews: [nameRow, motorbikeLabel])
         textStack.axis = .vertical
-        textStack.spacing = 2
+        textStack.spacing = 3
 
-        primaryButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+        primaryButton.titleLabel?.font = AppFont.body(12.5, .bold)
+        primaryButton.titleLabel?.adjustsFontSizeToFitWidth = true
+        primaryButton.titleLabel?.minimumScaleFactor = 0.8
+        primaryButton.titleLabel?.lineBreakMode = .byClipping
+        primaryButton.layer.cornerRadius = 11
+        primaryButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
+        // Ancho fijo: el texto cambia según el estado ("Seguir", "Pendiente",
+        // "Dejar de seguir"...) y sin esto cada fila quedaba con el botón a
+        // un ancho distinto según cuánto ocupara su propio texto.
+        primaryButton.widthAnchor.constraint(equalToConstant: 128).isActive = true
+        primaryButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 6, bottom: 0, right: 6)
         primaryButton.addTarget(self, action: #selector(onTapPrimary), for: .touchUpInside)
 
         rejectButton.setTitle("Rechazar", for: .normal)
-        rejectButton.titleLabel?.font = .systemFont(ofSize: 13, weight: .semibold)
+        rejectButton.titleLabel?.font = AppFont.body(13, .semibold)
         rejectButton.setTitleColor(.systemRed, for: .normal)
         rejectButton.addTarget(self, action: #selector(onTapReject), for: .touchUpInside)
         rejectButton.isHidden = true
@@ -50,14 +91,14 @@ final class RiderRowCell: UITableViewCell {
         let row = UIStackView(arrangedSubviews: [avatarView, textStack, buttonStack])
         row.axis = .horizontal
         row.alignment = .center
-        row.spacing = 12
+        row.spacing = 11
         row.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(row)
+        card.addSubview(row)
         NSLayoutConstraint.activate([
-            row.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            row.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8),
-            row.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            row.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            row.topAnchor.constraint(equalTo: card.topAnchor, constant: 11),
+            row.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -11),
+            row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 12),
+            row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -12),
         ])
     }
 
@@ -65,11 +106,23 @@ final class RiderRowCell: UITableViewCell {
     /// tu propia fila). [showReject] añade el botón "Rechazar" (solicitudes).
     func configure(rider: RiderSummary, primaryTitle: String?, showReject: Bool = false) {
         nameLabel.text = rider.username
-        motorbikeLabel.text = rider.currentMotorbike?.displayName ?? (rider.isPrivate ? "Cuenta privada" : "")
+        lockIcon.isHidden = !rider.isPrivate
+        motorbikeLabel.styleAsLabel(
+            rider.currentMotorbike?.displayName ?? (rider.isPrivate ? "Cuenta privada" : "Sin moto en el garaje"),
+            size: 11.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.6)
         avatarView.load(urlString: rider.avatarUrl, placeholder: UIImage(systemName: "person.circle.fill"))
 
         primaryButton.isHidden = primaryTitle == nil
         primaryButton.setTitle(primaryTitle, for: .normal)
+        if rider.followStatus == "following" || rider.followStatus == "pending" {
+            primaryButton.setTitleColor(AppTheme.text, for: .normal)
+            primaryButton.backgroundColor = AppTheme.bg3
+            primaryButton.layer.borderWidth = 0
+        } else {
+            primaryButton.setTitleColor(AppTheme.bg0, for: .normal)
+            primaryButton.backgroundColor = AppTheme.primary
+            primaryButton.layer.borderWidth = 0
+        }
         rejectButton.isHidden = !showReject
     }
 
