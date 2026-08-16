@@ -171,6 +171,14 @@ final class RouteNavigationLauncher: NSObject {
         options.includesVisualInstructions = true
         options.includesSpokenInstructions = true
         options.locale = Locale(identifier: "es")
+        // Encontrada la causa real del corte en curvas: `routeShapeResolution`
+        // por defecto es `.low` ("simplified") — la propia documentación del
+        // SDK dice que esa resolución "carece del detalle necesario para
+        // fijarse en tramos individuales de la ruta". `.full` es "equivalente
+        // a concatenar la forma de todos los `steps`" — la misma fuente que
+        // ya usa la flecha de maniobra (siempre a resolución completa,
+        // independientemente de este ajuste, por eso a ella nunca le pasaba).
+        options.routeShapeResolution = .full
 
         let routingProvider = navigationProvider.mapboxNavigation.routingProvider()
         return try await routingProvider.calculateRoutes(options: options).value
@@ -215,6 +223,10 @@ final class RouteNavigationLauncher: NSObject {
         // de voz que necesita el TTS. Los dos "faltaban" por el mismo motivo.
         matchOptions.includesVisualInstructions = true
         matchOptions.includesSpokenInstructions = true
+        // Ver el comentario en `calculateApproachPreviewRoute` — la causa
+        // real del corte en curvas era esta, no el muestreo ni el radio de
+        // búsqueda: `routeShapeResolution` por defecto es `.low`.
+        matchOptions.routeShapeResolution = .full
         matchOptions.locale = Locale(identifier: "es")
 
         let routingProvider = navigationProvider.mapboxNavigation.routingProvider()
@@ -323,14 +335,20 @@ final class RouteNavigationLauncher: NSObject {
             heading: navigation.heading,
             predictiveCacheManager: nil
         )
-        // Color de la línea SIN TOCAR — azul por defecto del SDK, tal cual,
-        // nada de `congestionConfiguration`/`routeCasingColor`/
-        // `maneuverArrowColor` en ámbar de marca. Es una comprobación
-        // puntual: aislar si el trazado (que sí sigue siendo el mismo
-        // cálculo de Map Matching de siempre) se ve distinto en algo más
-        // que el color al quitar toda nuestra personalización de encima.
-        // Cuando se confirme, esto se puede volver a poner.
-        //
+        // `routeColor` por sí solo únicamente sobreescribe los niveles de
+        // tráfico "bajo"/"desconocido" — deja "moderado/denso/severo" con
+        // los colores por defecto del SDK. Fijamos todos los niveles al
+        // naranja de marca para que sea un único color consistente en toda
+        // la guía.
+        let brandColors = CongestionColorsConfiguration.Colors(
+            low: AppTheme.primary, moderate: AppTheme.primary, heavy: AppTheme.primary,
+            severe: AppTheme.primary, unknown: AppTheme.primary
+        )
+        brandedMapView.congestionConfiguration.colors = CongestionColorsConfiguration(
+            mainRouteColors: brandColors, alternativeRouteColors: brandColors
+        )
+        brandedMapView.routeCasingColor = AppTheme.primary.withAlphaComponent(0.6)
+        brandedMapView.maneuverArrowColor = AppTheme.primary
         // Cuando la Map Matching API no logra encajar todo el trazado en
         // un único tramo continuo (algo real y comprobado: en pruebas con
         // rutas reales grabadas, un tramo de ~50m sin conexión clara ya
