@@ -350,36 +350,6 @@ final class RouteNavigationLauncher: NSObject {
         // trazado grabado.
         brandedMapView.showsAlternatives = false
 
-        // La app Flutter anterior de Rydr (`mobile/lib/features/routes/`)
-        // ya había resuelto este mismo problema, y de una forma más
-        // robusta que confiar en la geometría de Map Matching a secas: la
-        // línea que se ve en el mapa es SIEMPRE tu trazado grabado tal
-        // cual, punto por punto, nunca recalculada — Map Matching se usa
-        // solo aparte, para sacar las indicaciones de giro/voz, y si falla
-        // en algún tramo (que pasa: verificado con datos reales que no es
-        // cuestión de nuestro muestreo, es que la API a veces no encuentra
-        // una carretera fiable) la app se queda "sin voz ahí", pero la
-        // línea nunca se ve afectada porque nunca dependió de ese cálculo.
-        //
-        // Aquí se hace lo mismo: se pinta el trazado exacto encima de la
-        // línea que ya dibuja `NavigationMapView` a partir de la ruta
-        // "enganchada" — con el mismo estilo llamativo (grueso + borde
-        // oscuro) que ya usamos en "Registrar" — así lo que se ve siempre
-        // seguirá tu recorrido real, aunque el matching por debajo (el que
-        // sí usan las indicaciones de giro/voz/RESTANTE-LLEGADA) se
-        // equivoque en algún tramo puntual.
-        let exactPathManager = brandedMapView.mapView.annotations.makePolylineAnnotationManager()
-        exactPathManager.lineCap = .round
-        exactPathManager.lineJoin = .round
-        if exactPath.count >= 2 {
-            var exactPathLine = PolylineAnnotation(lineCoordinates: exactPath)
-            exactPathLine.lineColor = StyleColor(AppTheme.primary)
-            exactPathLine.lineWidth = 7
-            exactPathLine.lineBorderColor = StyleColor(AppTheme.bg0)
-            exactPathLine.lineBorderWidth = 1.6
-            exactPathManager.annotations = [exactPathLine]
-        }
-
         // Banners propios en vez de los del SDK — la maquetación de los
         // suyos (constraints privadas) no deja meterles las etiquetas
         // "RESTANTE"/"LLEGADA" como pide el "modo navegación" de Claude
@@ -419,7 +389,48 @@ final class RouteNavigationLauncher: NSObject {
             navigationViewController?.dismiss(animated: true)
         }
         navigationViewController.modalPresentationStyle = .fullScreen
-        viewController.present(navigationViewController, animated: true)
+        // El trazado exacto se pinta DESPUÉS de presentar, no antes — en
+        // Mapbox GL la capa que se añade más tarde queda encima. Si se
+        // pintaba antes de crear el `NavigationViewController` (como en el
+        // primer intento), la línea del SDK —la que puede fallar— se
+        // añadía después y tapaba la nuestra, dejando el problema
+        // exactamente igual de visible. Con el `completion` del `present`
+        // ya ha dado tiempo a que el SDK monte su propia línea, así que la
+        // nuestra se añade la última y queda arriba.
+        viewController.present(navigationViewController, animated: true) {
+            Self.drawExactPathOverlay(exactPath, on: brandedMapView)
+        }
+    }
+
+    /// La app Flutter anterior de Rydr (`mobile/lib/features/routes/`) ya
+    /// había resuelto este mismo problema, y de una forma más robusta que
+    /// confiar en la geometría de Map Matching a secas: la línea que se ve
+    /// en el mapa es SIEMPRE tu trazado grabado tal cual, punto por punto,
+    /// nunca recalculada — Map Matching se usa solo aparte, para sacar las
+    /// indicaciones de giro/voz, y si falla en algún tramo (que pasa:
+    /// verificado con datos reales que no es cuestión de nuestro muestreo,
+    /// es que la API a veces no encuentra una carretera fiable) la app se
+    /// queda "sin voz ahí", pero la línea nunca se ve afectada porque nunca
+    /// dependió de ese cálculo.
+    ///
+    /// Aquí se hace lo mismo: se pinta el trazado exacto encima de la línea
+    /// que ya dibuja `NavigationMapView` a partir de la ruta "enganchada"
+    /// — con el mismo estilo llamativo (grueso + borde oscuro) que ya
+    /// usamos en "Registrar" — así lo que se ve siempre seguirá tu
+    /// recorrido real, aunque el matching por debajo (el que sí usan las
+    /// indicaciones de giro/voz/RESTANTE-LLEGADA) se equivoque en algún
+    /// tramo puntual.
+    private static func drawExactPathOverlay(_ exactPath: [CLLocationCoordinate2D], on mapView: NavigationMapView) {
+        guard exactPath.count >= 2 else { return }
+        let exactPathManager = mapView.mapView.annotations.makePolylineAnnotationManager()
+        exactPathManager.lineCap = .round
+        exactPathManager.lineJoin = .round
+        var exactPathLine = PolylineAnnotation(lineCoordinates: exactPath)
+        exactPathLine.lineColor = StyleColor(AppTheme.primary)
+        exactPathLine.lineWidth = 7
+        exactPathLine.lineBorderColor = StyleColor(AppTheme.bg0)
+        exactPathLine.lineBorderWidth = 1.6
+        exactPathManager.annotations = [exactPathLine]
     }
 }
 
