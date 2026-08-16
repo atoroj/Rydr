@@ -22,15 +22,18 @@ import UIKit
 /// literalmente el mismo pipeline (mismo Douglas-Peucker, misma API) para
 /// todo el trayecto, así que no hay una fase "peor" que la otra.
 ///
-/// La línea que se ve en el mapa, eso sí, NO es la geometría que devuelve
-/// el matching — es tu trazado grabado tal cual, pintado encima (ver
-/// `present`). Map Matching no siempre logra encajar todo el recorrido en
-/// carreteras reales (comprobado con rutas de verdad: a veces no hay
-/// forma, ni afinando el muestreo ni el radio de búsqueda) y de depender
-/// de su geometría para dibujar, un fallo puntual del matching se traduce
-/// en una línea que se aleja de la carretera real. Se usa solo para las
-/// indicaciones de giro/voz — mismo patrón que ya resolvió esto en la app
-/// Flutter anterior de Rydr (`mobile/lib/features/routes/`).
+/// La línea que se ve en el mapa es la geometría que devuelve el propio
+/// matching (dibujada por `NavigationMapView`, sin overlay nuestro
+/// encima) — se probó pintar el trazado grabado tal cual, punto a punto,
+/// pero esa línea conecta puntos consecutivos con tramos rectos sin
+/// interpolar la curva real entre medias: en una curva cerrada donde el
+/// siguiente punto grabado ya gira bastante, esa recta se nota aunque el
+/// matching de debajo siga bien la carretera. La geometría "enganchada"
+/// del propio SDK trae muchos más puntos interpolados a lo largo de la
+/// carretera real, así que sigue las curvas mejor que unir a mano los
+/// puntos grabados — el hueco real (comprobado con rutas de verdad: Map
+/// Matching a veces no encaja algún tramo, ni afinando el muestreo ni el
+/// radio de búsqueda) es aparte y se avisa con `showTruncatedRouteWarning`.
 @MainActor
 final class RouteNavigationLauncher: NSObject {
     static let shared = RouteNavigationLauncher()
@@ -78,7 +81,7 @@ final class RouteNavigationLauncher: NSObject {
 
         let navigationRoutes = try await matchToNavigationRoutes(
             coordinates: coordinates, generousRadiusForFirstPoint: prependedLiveLocation)
-        present(navigationRoutes: navigationRoutes, exactPath: orderedPath, from: viewController)
+        present(navigationRoutes: navigationRoutes, from: viewController)
 
         // La Map Matching API a veces no logra encajar todo el trazado en
         // un único tramo continuo y de fiar (comprobado: no es cuestión de
@@ -300,7 +303,7 @@ final class RouteNavigationLauncher: NSObject {
 
     // MARK: - Presentación
 
-    private func present(navigationRoutes: NavigationRoutes, exactPath: [CLLocationCoordinate2D], from viewController: UIViewController) {
+    private func present(navigationRoutes: NavigationRoutes, from viewController: UIViewController) {
         // Mapa de navegación con la línea de ruta en el naranja de marca en
         // vez del azul por defecto del SDK. Los colores de congestión
         // (moderado/denso/severo) se dejan tal cual — son señalización de
@@ -389,48 +392,7 @@ final class RouteNavigationLauncher: NSObject {
             navigationViewController?.dismiss(animated: true)
         }
         navigationViewController.modalPresentationStyle = .fullScreen
-        // El trazado exacto se pinta DESPUÉS de presentar, no antes — en
-        // Mapbox GL la capa que se añade más tarde queda encima. Si se
-        // pintaba antes de crear el `NavigationViewController` (como en el
-        // primer intento), la línea del SDK —la que puede fallar— se
-        // añadía después y tapaba la nuestra, dejando el problema
-        // exactamente igual de visible. Con el `completion` del `present`
-        // ya ha dado tiempo a que el SDK monte su propia línea, así que la
-        // nuestra se añade la última y queda arriba.
-        viewController.present(navigationViewController, animated: true) {
-            Self.drawExactPathOverlay(exactPath, on: brandedMapView)
-        }
-    }
-
-    /// La app Flutter anterior de Rydr (`mobile/lib/features/routes/`) ya
-    /// había resuelto este mismo problema, y de una forma más robusta que
-    /// confiar en la geometría de Map Matching a secas: la línea que se ve
-    /// en el mapa es SIEMPRE tu trazado grabado tal cual, punto por punto,
-    /// nunca recalculada — Map Matching se usa solo aparte, para sacar las
-    /// indicaciones de giro/voz, y si falla en algún tramo (que pasa:
-    /// verificado con datos reales que no es cuestión de nuestro muestreo,
-    /// es que la API a veces no encuentra una carretera fiable) la app se
-    /// queda "sin voz ahí", pero la línea nunca se ve afectada porque nunca
-    /// dependió de ese cálculo.
-    ///
-    /// Aquí se hace lo mismo: se pinta el trazado exacto encima de la línea
-    /// que ya dibuja `NavigationMapView` a partir de la ruta "enganchada"
-    /// — con el mismo estilo llamativo (grueso + borde oscuro) que ya
-    /// usamos en "Registrar" — así lo que se ve siempre seguirá tu
-    /// recorrido real, aunque el matching por debajo (el que sí usan las
-    /// indicaciones de giro/voz/RESTANTE-LLEGADA) se equivoque en algún
-    /// tramo puntual.
-    private static func drawExactPathOverlay(_ exactPath: [CLLocationCoordinate2D], on mapView: NavigationMapView) {
-        guard exactPath.count >= 2 else { return }
-        let exactPathManager = mapView.mapView.annotations.makePolylineAnnotationManager()
-        exactPathManager.lineCap = .round
-        exactPathManager.lineJoin = .round
-        var exactPathLine = PolylineAnnotation(lineCoordinates: exactPath)
-        exactPathLine.lineColor = StyleColor(AppTheme.primary)
-        exactPathLine.lineWidth = 7
-        exactPathLine.lineBorderColor = StyleColor(AppTheme.bg0)
-        exactPathLine.lineBorderWidth = 1.6
-        exactPathManager.annotations = [exactPathLine]
+        viewController.present(navigationViewController, animated: true)
     }
 }
 
