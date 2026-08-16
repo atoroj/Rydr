@@ -20,7 +20,6 @@ final class RegisterViewController: UIViewController {
     private var lastCameraUpdate: Date?
     private var rideStartDate: Date?
     private var recordingTimer: Timer?
-    private var isPaused = false
 
     // Cifras reales de la grabación en curso — nada de datos de relleno:
     // la distancia sale de sumar la distancia entre puntos consecutivos,
@@ -58,8 +57,6 @@ final class RegisterViewController: UIViewController {
     private let kmValueLabel = UILabel()
     private let speedValueLabel = UILabel()
     private let elevationValueLabel = UILabel()
-    private let pauseIcon = UIImageView(image: UIImage(systemName: "pause.fill"))
-    private let pauseLabel = UILabel()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -85,6 +82,8 @@ final class RegisterViewController: UIViewController {
         mapView.location.options = LocationOptions(
             puckType: .puck2D(Self.brandedPuck), puckBearing: .heading, puckBearingEnabled: true)
         polylineManager = mapView.annotations.makePolylineAnnotationManager()
+        polylineManager?.lineCap = .round
+        polylineManager?.lineJoin = .round
     }
 
     /// Punto de posición en el ámbar de marca (con anillo de precisión y
@@ -332,7 +331,11 @@ final class RegisterViewController: UIViewController {
         headerRow.alignment = .center
         headerRow.translatesAutoresizingMaskIntoConstraints = false
 
-        timeLabel.font = AppFont.data(70)
+        // Más pequeño que antes (era 70pt a toda plana, empujando el mapa
+        // hacia abajo) — ahora vive dentro de una tarjeta flotante sobre el
+        // mapa a pantalla completa, así que no necesita tanto peso visual;
+        // el trazado en vivo es el protagonista, no el cronómetro.
+        timeLabel.font = AppFont.data(46)
         timeLabel.textColor = AppTheme.text
         timeLabel.text = "00:00"
 
@@ -359,41 +362,38 @@ final class RegisterViewController: UIViewController {
         // ven (siguen alineados a la izquierda).
         infoStack.alignment = .fill
         infoStack.spacing = 4
-        infoStack.setCustomSpacing(16, after: timeCaption)
+        infoStack.setCustomSpacing(14, after: timeCaption)
         infoStack.translatesAutoresizingMaskIntoConstraints = false
+
+        // Tarjeta flotante (cristal oscuro semitransparente + sombra) en
+        // vez del bloque opaco de antes que ocupaba su propia franja fija
+        // encima del mapa — ahora el mapa va a pantalla completa por
+        // detrás y esta tarjeta flota sobre él, dejando mucho más mapa (y
+        // trazado) visible, como se pidió.
+        let infoCard = UIView()
+        infoCard.backgroundColor = AppTheme.bg1.withAlphaComponent(0.88)
+        infoCard.layer.cornerRadius = 18
+        infoCard.layer.borderWidth = 1
+        infoCard.layer.borderColor = UIColor.white.withAlphaComponent(0.08).cgColor
+        infoCard.layer.shadowColor = UIColor.black.cgColor
+        infoCard.layer.shadowOpacity = 0.35
+        infoCard.layer.shadowRadius = 16
+        infoCard.layer.shadowOffset = CGSize(width: 0, height: 8)
+        infoCard.translatesAutoresizingMaskIntoConstraints = false
+        infoCard.addSubview(infoStack)
+        NSLayoutConstraint.activate([
+            infoStack.topAnchor.constraint(equalTo: infoCard.topAnchor, constant: 14),
+            infoStack.bottomAnchor.constraint(equalTo: infoCard.bottomAnchor, constant: -14),
+            infoStack.leadingAnchor.constraint(equalTo: infoCard.leadingAnchor, constant: 14),
+            infoStack.trailingAnchor.constraint(equalTo: infoCard.trailingAnchor, constant: -14),
+        ])
 
         activeMapWrapper.translatesAutoresizingMaskIntoConstraints = false
         activeMapWrapper.clipsToBounds = true
 
-        // Pausar (flexible) + Fin (ancho fijo, ámbar) — igual que el
-        // prototipo, ambos altos (72pt) para pulsarse con guantes.
-        pauseIcon.tintColor = AppTheme.text
-        pauseIcon.contentMode = .scaleAspectFit
-        pauseIcon.translatesAutoresizingMaskIntoConstraints = false
-        pauseIcon.widthAnchor.constraint(equalToConstant: 18).isActive = true
-
-        pauseLabel.styleAsLabel("Pausar", size: 15, color: AppTheme.text, tracking: 1.2)
-
-        let pauseContent = UIStackView(arrangedSubviews: [pauseIcon, pauseLabel])
-        pauseContent.axis = .horizontal
-        pauseContent.spacing = 9
-        pauseContent.alignment = .center
-        pauseContent.isUserInteractionEnabled = false
-        pauseContent.translatesAutoresizingMaskIntoConstraints = false
-
-        let pauseButton = UIButton(type: .system)
-        pauseButton.backgroundColor = AppTheme.bg3
-        pauseButton.layer.cornerRadius = 18
-        pauseButton.layer.borderWidth = 1
-        pauseButton.layer.borderColor = UIColor.white.withAlphaComponent(0.12).cgColor
-        pauseButton.heightAnchor.constraint(equalToConstant: 72).isActive = true
-        pauseButton.addTarget(self, action: #selector(onPauseTapped), for: .touchUpInside)
-        pauseButton.addSubview(pauseContent)
-        NSLayoutConstraint.activate([
-            pauseContent.centerXAnchor.constraint(equalTo: pauseButton.centerXAnchor),
-            pauseContent.centerYAnchor.constraint(equalTo: pauseButton.centerYAnchor),
-        ])
-
+        // Fin — ancho completo, ámbar, alto (72pt) para pulsarse con
+        // guantes. Ya no hay botón de pausar: la grabación corre sin
+        // interrupciones desde "Empezar ruta" hasta "Fin".
         let finishIcon = UIImageView(image: UIImage(systemName: "stop.fill"))
         finishIcon.tintColor = AppTheme.bg0
         finishIcon.contentMode = .scaleAspectFit
@@ -418,7 +418,6 @@ final class RegisterViewController: UIViewController {
         finishButton.layer.shadowRadius = 10
         finishButton.layer.shadowOffset = CGSize(width: 0, height: 6)
         finishButton.translatesAutoresizingMaskIntoConstraints = false
-        finishButton.widthAnchor.constraint(equalToConstant: 112).isActive = true
         finishButton.heightAnchor.constraint(equalToConstant: 72).isActive = true
         finishButton.addTarget(self, action: #selector(onFinishTapped), for: .touchUpInside)
         finishButton.addSubview(finishContent)
@@ -433,30 +432,30 @@ final class RegisterViewController: UIViewController {
         bottomBar.layer.borderColor = UIColor.white.withAlphaComponent(0.08).cgColor
         bottomBar.translatesAutoresizingMaskIntoConstraints = false
 
-        let bottomRow = UIStackView(arrangedSubviews: [pauseButton, finishButton])
-        bottomRow.axis = .horizontal
-        bottomRow.spacing = 12
-        bottomRow.translatesAutoresizingMaskIntoConstraints = false
-        bottomBar.addSubview(bottomRow)
+        bottomBar.addSubview(finishButton)
         NSLayoutConstraint.activate([
-            bottomRow.topAnchor.constraint(equalTo: bottomBar.topAnchor, constant: 14),
-            bottomRow.bottomAnchor.constraint(equalTo: bottomBar.safeAreaLayoutGuide.bottomAnchor, constant: -4),
-            bottomRow.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 16),
-            bottomRow.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -16),
+            finishButton.topAnchor.constraint(equalTo: bottomBar.topAnchor, constant: 14),
+            finishButton.bottomAnchor.constraint(equalTo: bottomBar.safeAreaLayoutGuide.bottomAnchor, constant: -4),
+            finishButton.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 16),
+            finishButton.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -16),
         ])
 
-        activeContainer.addSubview(infoStack)
+        // Orden de capas: mapa primero (a pantalla completa, de fondo),
+        // tarjeta de cifras y barra inferior encima flotando — antes el
+        // mapa era un hermano más, encajado en el hueco que dejaban las
+        // otras dos franjas.
         activeContainer.addSubview(activeMapWrapper)
+        activeContainer.addSubview(infoCard)
         activeContainer.addSubview(bottomBar)
         NSLayoutConstraint.activate([
-            infoStack.topAnchor.constraint(equalTo: activeContainer.safeAreaLayoutGuide.topAnchor, constant: 8),
-            infoStack.leadingAnchor.constraint(equalTo: activeContainer.leadingAnchor, constant: 16),
-            infoStack.trailingAnchor.constraint(equalTo: activeContainer.trailingAnchor, constant: -16),
-
-            activeMapWrapper.topAnchor.constraint(equalTo: infoStack.bottomAnchor, constant: 16),
+            activeMapWrapper.topAnchor.constraint(equalTo: activeContainer.topAnchor),
             activeMapWrapper.leadingAnchor.constraint(equalTo: activeContainer.leadingAnchor),
             activeMapWrapper.trailingAnchor.constraint(equalTo: activeContainer.trailingAnchor),
             activeMapWrapper.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
+
+            infoCard.topAnchor.constraint(equalTo: activeContainer.safeAreaLayoutGuide.topAnchor, constant: 8),
+            infoCard.leadingAnchor.constraint(equalTo: activeContainer.leadingAnchor, constant: 12),
+            infoCard.trailingAnchor.constraint(equalTo: activeContainer.trailingAnchor, constant: -12),
 
             bottomBar.leadingAnchor.constraint(equalTo: activeContainer.leadingAnchor),
             bottomBar.trailingAnchor.constraint(equalTo: activeContainer.trailingAnchor),
@@ -573,16 +572,6 @@ final class RegisterViewController: UIViewController {
         Task { await startRideFlow() }
     }
 
-    @objc private func onPauseTapped() {
-        isPaused.toggle()
-        pauseLabel.styleAsLabel(isPaused ? "Reanudar" : "Pausar", size: 15, color: AppTheme.text, tracking: 1.2)
-        pauseIcon.image = UIImage(systemName: isPaused ? "play.fill" : "pause.fill")
-        stateLabel.styleAsLabel(
-            isPaused ? "Pausado" : "Grabando", size: 12.5, medium: true,
-            color: isPaused ? AppTheme.accentTeal : AppTheme.primary, tracking: 1.4)
-        updateActiveStats()
-    }
-
     @objc private func onFinishTapped() {
         Task { await finishRide() }
     }
@@ -613,11 +602,8 @@ final class RegisterViewController: UIViewController {
             totalElevationGainMeters = 0
             lastAltitude = nil
             rideStartDate = Date()
-            isPaused = false
             activeBikeLabel.styleAsLabel(bike.displayName, size: 12.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.9)
             stateLabel.styleAsLabel("Grabando", size: 12.5, medium: true, color: AppTheme.primary, tracking: 1.4)
-            pauseLabel.styleAsLabel("Pausar", size: 15, color: AppTheme.text, tracking: 1.2)
-            pauseIcon.image = UIImage(systemName: "pause.fill")
             switchToActive()
             startTimer()
         } catch {
@@ -635,7 +621,6 @@ final class RegisterViewController: UIViewController {
             _ = try await rideRepository.finishRide(rideId: ride.id)
             let pointCount = trackCoordinates.count
             currentRide = nil
-            isPaused = false
             stopTimer()
             switchToIdle(animated: true)
             // Ya no hace falta que el sistema mantenga la app viva en
@@ -716,12 +701,10 @@ extension RegisterViewController: CLLocationManagerDelegate {
         if lastCameraUpdate == nil || now.timeIntervalSince(lastCameraUpdate!) > 0.3 {
             lastCameraUpdate = now
             mapView.camera.ease(
-                to: CameraOptions(center: coordinate, zoom: (isRecording && !isPaused) ? 17 : 15), duration: 0.3)
+                to: CameraOptions(center: coordinate, zoom: isRecording ? 17 : 15), duration: 0.3)
         }
 
-        // En pausa seguimos centrando el mapa en la posición actual, pero
-        // no se añaden puntos al trazado ni se manda nada al backend.
-        guard isRecording, !isPaused, let ride = currentRide else { return }
+        guard isRecording, let ride = currentRide else { return }
 
         if let previous = trackCoordinates.last {
             totalDistanceMeters += CLLocation(latitude: previous.latitude, longitude: previous.longitude)
@@ -739,7 +722,13 @@ extension RegisterViewController: CLLocationManagerDelegate {
         if trackCoordinates.count >= 2 {
             var polyline = PolylineAnnotation(lineCoordinates: trackCoordinates)
             polyline.lineColor = StyleColor(AppTheme.primary)
-            polyline.lineWidth = 4
+            polyline.lineWidth = 7
+            // Borde oscuro alrededor del trazado ámbar — sin él, la línea
+            // se mezcla con el fondo claro del estilo `outdoors` en zonas
+            // de asfalto/tierra parecidas en tono. Con el borde se recorta
+            // igual de bien sobre calles claras que oscuras.
+            polyline.lineBorderColor = StyleColor(AppTheme.bg0)
+            polyline.lineBorderWidth = 1.6
             polylineManager?.annotations = [polyline]
         }
 

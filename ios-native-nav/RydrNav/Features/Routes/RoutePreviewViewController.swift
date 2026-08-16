@@ -12,9 +12,16 @@ final class RoutePreviewViewController: UIViewController {
     private var mapView: MapView!
     private var polylineManager: PolylineAnnotationManager?
 
+    private let directionControl = UISegmentedControl(items: ["Desde el principio", "Desde el final"])
     private let statsLabel = UILabel()
     private let startButton = UIButton(type: .system)
     private let statusLabel = UILabel()
+
+    /// Punto de partida elegido para calcular la vista previa y arrancar la
+    /// guía — el primer punto grabado del trazado, o el último si se elige
+    /// "Desde el final" (para hacer la ruta al revés).
+    private var reversed: Bool { directionControl.selectedSegmentIndex == 1 }
+    private var startingPoint: CLLocationCoordinate2D? { reversed ? route.path.last : route.path.first }
 
     init(route: RouteModel) {
         self.route = route
@@ -79,6 +86,16 @@ final class RoutePreviewViewController: UIViewController {
         card.layer.shadowOffset = CGSize(width: 0, height: -2)
         card.translatesAutoresizingMaskIntoConstraints = false
 
+        // Solo tiene sentido ofrecerlo si hay trazado real entre dos
+        // extremos distintos — con menos de 2 puntos no hay "principio" ni
+        // "final" que elegir.
+        directionControl.isHidden = route.path.count < 2
+        directionControl.selectedSegmentIndex = 0
+        directionControl.backgroundColor = AppTheme.bg2
+        directionControl.setTitleTextAttributes([.foregroundColor: AppTheme.textSecondary(0.6)], for: .normal)
+        directionControl.setTitleTextAttributes([.foregroundColor: AppTheme.text], for: .selected)
+        directionControl.addTarget(self, action: #selector(onDirectionChanged), for: .valueChanged)
+
         statsLabel.text = "Calculando ruta…"
         statsLabel.font = AppFont.body(14)
         statsLabel.textColor = AppTheme.textSecondary(0.6)
@@ -98,7 +115,7 @@ final class RoutePreviewViewController: UIViewController {
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 0
 
-        let stack = UIStackView(arrangedSubviews: [statsLabel, startButton, statusLabel])
+        let stack = UIStackView(arrangedSubviews: [directionControl, statsLabel, startButton, statusLabel])
         stack.axis = .vertical
         stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -133,8 +150,8 @@ final class RoutePreviewViewController: UIViewController {
 
         var statsText = "\(route.distanceKm) km · \(route.durationMinutes) min"
 
-        if let routeStart = route.path.first,
-           let approach = await RouteNavigationLauncher.shared.previewApproach(to: routeStart)
+        if let startingPoint,
+           let approach = await RouteNavigationLauncher.shared.previewApproach(to: startingPoint)
         {
             var approachLine = PolylineAnnotation(lineCoordinates: approach.coordinates)
             approachLine.lineColor = StyleColor(AppTheme.accentTeal)
@@ -167,13 +184,18 @@ final class RoutePreviewViewController: UIViewController {
         dismiss(animated: true)
     }
 
+    @objc private func onDirectionChanged() {
+        statsLabel.text = "Calculando ruta…"
+        Task { await loadPreview() }
+    }
+
     @objc private func onStartTapped() {
         startButton.isEnabled = false
         statusLabel.text = "Calculando ruta…"
 
         Task {
             do {
-                try await RouteNavigationLauncher.shared.startWithApproach(route: route, presentingFrom: self)
+                try await RouteNavigationLauncher.shared.start(route: route, reversed: reversed, presentingFrom: self)
                 statusLabel.text = nil
                 try? await RouteRepository().markAsRidden(routeId: route.id)
             } catch {
