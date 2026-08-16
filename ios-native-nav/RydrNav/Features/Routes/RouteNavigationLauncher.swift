@@ -323,21 +323,14 @@ final class RouteNavigationLauncher: NSObject {
             heading: navigation.heading,
             predictiveCacheManager: nil
         )
-        // `routeColor` por sí solo únicamente sobreescribe los niveles de
-        // tráfico "bajo"/"desconocido" — deja "moderado/denso/severo" con
-        // los colores por defecto del SDK. Fijamos todos los niveles al
-        // naranja de marca para que sea un único color consistente en toda
-        // la guía, de principio a fin (ya no hay dos tramos con orígenes de
-        // datos distintos que puedan salir de colores distintos).
-        let brandColors = CongestionColorsConfiguration.Colors(
-            low: AppTheme.primary, moderate: AppTheme.primary, heavy: AppTheme.primary,
-            severe: AppTheme.primary, unknown: AppTheme.primary
-        )
-        brandedMapView.congestionConfiguration.colors = CongestionColorsConfiguration(
-            mainRouteColors: brandColors, alternativeRouteColors: brandColors
-        )
-        brandedMapView.routeCasingColor = AppTheme.primary.withAlphaComponent(0.6)
-        brandedMapView.maneuverArrowColor = AppTheme.primary
+        // Color de la línea SIN TOCAR — azul por defecto del SDK, tal cual,
+        // nada de `congestionConfiguration`/`routeCasingColor`/
+        // `maneuverArrowColor` en ámbar de marca. Es una comprobación
+        // puntual: aislar si el trazado (que sí sigue siendo el mismo
+        // cálculo de Map Matching de siempre) se ve distinto en algo más
+        // que el color al quitar toda nuestra personalización de encima.
+        // Cuando se confirme, esto se puede volver a poner.
+        //
         // Cuando la Map Matching API no logra encajar todo el trazado en
         // un único tramo continuo (algo real y comprobado: en pruebas con
         // rutas reales grabadas, un tramo de ~50m sin conexión clara ya
