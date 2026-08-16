@@ -227,7 +227,7 @@ final class FeedItemCell: UICollectionViewCell {
 
     func configure(with item: FeedItem) {
         authorNameLabel.text = item.author.username
-        authorAvatar.load(urlString: item.author.avatarUrl, placeholder: UIImage(systemName: "person.circle.fill"))
+        authorAvatar.loadAvatar(urlString: item.author.avatarUrl, displayName: item.author.username)
         metaLabel.styleAsLabel(
             Self.relativeFormatter.localizedString(for: item.route.createdAt, relativeTo: Date()),
             size: 11.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.6)

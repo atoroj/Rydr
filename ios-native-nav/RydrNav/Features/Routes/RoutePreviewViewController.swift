@@ -151,11 +151,12 @@ final class RoutePreviewViewController: UIViewController {
         polylineManager?.annotations = polylines
         statsLabel.text = statsText
 
-        if !boundsCoordinates.isEmpty {
-            let camera = mapView.mapboxMap.camera(
-                for: boundsCoordinates,
-                padding: UIEdgeInsets(top: 60, left: 40, bottom: 180, right: 40),
-                bearing: nil, pitch: nil)
+        if !boundsCoordinates.isEmpty,
+           let camera = try? mapView.mapboxMap.camera(
+               for: boundsCoordinates, camera: CameraOptions(),
+               coordinatesPadding: UIEdgeInsets(top: 60, left: 40, bottom: 180, right: 40),
+               maxZoom: nil, offset: nil)
+        {
             mapView.mapboxMap.setCamera(to: camera)
         }
     }

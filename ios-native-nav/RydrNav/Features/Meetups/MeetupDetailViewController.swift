@@ -190,7 +190,7 @@ final class MeetupDetailViewController: UIViewController {
         view.translatesAutoresizingMaskIntoConstraints = false
         view.widthAnchor.constraint(equalToConstant: 28).isActive = true
         view.heightAnchor.constraint(equalToConstant: 28).isActive = true
-        view.load(urlString: participant.avatarUrl, placeholder: UIImage(systemName: "person.circle.fill"))
+        view.loadAvatar(urlString: participant.avatarUrl, displayName: participant.username)
         return view
     }
 

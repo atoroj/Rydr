@@ -114,7 +114,7 @@ final class AddMotorbikeViewController: UIViewController {
     private func populateIfEditing() {
         guard let motorbike = existingMotorbike else { return }
         selectedType = motorbike.type
-        typeButton.setTitle("Tipo: \(motorbike.type)", for: .normal)
+        setTypeButtonTitle("Tipo: \(motorbike.type)")
         brandField.text = motorbike.brand
         modelField.text = motorbike.model
         yearField.text = motorbike.year.map(String.init)
@@ -129,22 +129,32 @@ final class AddMotorbikeViewController: UIViewController {
     }
 
     private func configureTypeMenu() {
+        // `UIButton.Configuration` en vez de `contentEdgeInsets` (obsoleto
+        // desde iOS 15 y, de hecho, ignorado si se usa configuration) —
+        // `setTypeButtonTitle` de abajo mantiene el resto de propiedades
+        // (color, alineación) al actualizar el texto.
+        var config = UIButton.Configuration.plain()
+        config.baseForegroundColor = AppTheme.text
+        config.contentInsets = NSDirectionalEdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
+        typeButton.configuration = config
         typeButton.contentHorizontalAlignment = .leading
-        typeButton.setTitleColor(AppTheme.text, for: .normal)
         typeButton.backgroundColor = AppTheme.bg2
         typeButton.layer.cornerRadius = 8
-        typeButton.contentEdgeInsets = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
         typeButton.heightAnchor.constraint(equalToConstant: 48).isActive = true
 
         let actions = Self.types.map { type in
             UIAction(title: type) { [weak self] _ in
                 self?.selectedType = type
-                self?.typeButton.setTitle("Tipo: \(type)", for: .normal)
+                self?.setTypeButtonTitle("Tipo: \(type)")
             }
         }
         typeButton.menu = UIMenu(children: actions)
         typeButton.showsMenuAsPrimaryAction = true
-        typeButton.setTitle("Tipo: \(selectedType)", for: .normal)
+        setTypeButtonTitle("Tipo: \(selectedType)")
+    }
+
+    private func setTypeButtonTitle(_ title: String) {
+        typeButton.configuration?.title = title
     }
 
     @objc private func onPickPhoto() {

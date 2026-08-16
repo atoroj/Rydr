@@ -75,7 +75,6 @@ final class RiderRowCell: UITableViewCell {
         // "Dejar de seguir"...) y sin esto cada fila quedaba con el botón a
         // un ancho distinto según cuánto ocupara su propio texto.
         primaryButton.widthAnchor.constraint(equalToConstant: 128).isActive = true
-        primaryButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 6, bottom: 0, right: 6)
         primaryButton.addTarget(self, action: #selector(onTapPrimary), for: .touchUpInside)
 
         rejectButton.setTitle("Rechazar", for: .normal)
@@ -110,7 +109,7 @@ final class RiderRowCell: UITableViewCell {
         motorbikeLabel.styleAsLabel(
             rider.currentMotorbike?.displayName ?? (rider.isPrivate ? "Cuenta privada" : "Sin moto en el garaje"),
             size: 11.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.6)
-        avatarView.load(urlString: rider.avatarUrl, placeholder: UIImage(systemName: "person.circle.fill"))
+        avatarView.loadAvatar(urlString: rider.avatarUrl, displayName: rider.username)
 
         primaryButton.isHidden = primaryTitle == nil
         primaryButton.setTitle(primaryTitle, for: .normal)

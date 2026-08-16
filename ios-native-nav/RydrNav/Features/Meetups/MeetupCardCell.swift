@@ -158,10 +158,24 @@ final class MeetupCardCell: UICollectionViewCell {
         progressStack.axis = .vertical
         progressStack.spacing = 7
 
-        actionButton.titleLabel?.font = AppFont.body(13.5, .bold)
+        // `UIButton.Configuration` en vez de `contentEdgeInsets` (obsoleto
+        // desde iOS 15). El título/color se sigue fijando con los setters
+        // clásicos más abajo — UIKit los sigue respetando con
+        // configuration puesta, es solo `contentEdgeInsets` lo que
+        // ignora — pero la fuente hay que fijarla vía
+        // `titleTextAttributesTransformer`: como el botón cambia
+        // `isEnabled` según el estado, un `titleLabel?.font` a pelo se
+        // perdía cada vez que UIKit recalculaba la configuration.
+        var config = UIButton.Configuration.plain()
+        config.contentInsets = NSDirectionalEdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16)
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = AppFont.body(13.5, .bold)
+            return outgoing
+        }
+        actionButton.configuration = config
         actionButton.layer.cornerRadius = 13
         actionButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
-        actionButton.contentEdgeInsets = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 16)
         actionButton.setContentHuggingPriority(.required, for: .horizontal)
         actionButton.addTarget(self, action: #selector(onTapAction), for: .touchUpInside)
 

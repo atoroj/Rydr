@@ -126,20 +126,40 @@ final class RegisterViewController: UIViewController {
         ])
     }
 
+    /// Botón de cerrar en cristal de verdad (Liquid Glass en iOS 26,
+    /// esmerilado normal antes) en vez del círculo negro semitransparente
+    /// de antes — aquí sí tiene sentido notarse, porque detrás siempre hay
+    /// mapa en movimiento, a diferencia de la barra inferior (fondo plano)
+    /// donde lo probamos primero.
     private func setupCloseButton() {
+        let effect: UIVisualEffect
+        if #available(iOS 26.0, *) {
+            effect = UIGlassEffect(style: .regular)
+        } else {
+            effect = UIBlurEffect(style: .systemChromeMaterial)
+        }
+        let glass = UIVisualEffectView(effect: effect)
+        glass.layer.cornerRadius = 18
+        glass.clipsToBounds = true
+        glass.translatesAutoresizingMaskIntoConstraints = false
+
         let button = UIButton(type: .system)
         button.setImage(UIImage(systemName: "xmark"), for: .normal)
         button.tintColor = .white
-        button.backgroundColor = UIColor.black.withAlphaComponent(0.4)
-        button.layer.cornerRadius = 18
         button.translatesAutoresizingMaskIntoConstraints = false
         button.addTarget(self, action: #selector(onCloseTapped), for: .touchUpInside)
-        view.addSubview(button)
+        glass.contentView.addSubview(button)
         NSLayoutConstraint.activate([
-            button.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            button.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
-            button.widthAnchor.constraint(equalToConstant: 36),
-            button.heightAnchor.constraint(equalToConstant: 36),
+            button.centerXAnchor.constraint(equalTo: glass.centerXAnchor),
+            button.centerYAnchor.constraint(equalTo: glass.centerYAnchor),
+        ])
+
+        view.addSubview(glass)
+        NSLayoutConstraint.activate([
+            glass.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            glass.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            glass.widthAnchor.constraint(equalToConstant: 36),
+            glass.heightAnchor.constraint(equalToConstant: 36),
         ])
     }
 
@@ -211,14 +231,7 @@ final class RegisterViewController: UIViewController {
             startTextStack.centerYAnchor.constraint(equalTo: startButton.centerYAnchor),
         ])
 
-        let followRouteButton = secondaryButton(title: "Seguir una ruta", action: #selector(onFollowRouteTapped))
-        let groupRideButton = secondaryButton(title: "Rodar en grupo", action: #selector(onGroupRideTapped))
-        let secondaryRow = UIStackView(arrangedSubviews: [followRouteButton, groupRideButton])
-        secondaryRow.axis = .horizontal
-        secondaryRow.spacing = 10
-        secondaryRow.distribution = .fillEqually
-
-        let contentStack = UIStackView(arrangedSubviews: [bikeCard, startButton, secondaryRow])
+        let contentStack = UIStackView(arrangedSubviews: [bikeCard, startButton])
         contentStack.axis = .vertical
         contentStack.spacing = 12
         contentStack.translatesAutoresizingMaskIntoConstraints = false
@@ -229,13 +242,16 @@ final class RegisterViewController: UIViewController {
             idleMapWrapper.topAnchor.constraint(equalTo: idleContainer.topAnchor),
             idleMapWrapper.leadingAnchor.constraint(equalTo: idleContainer.leadingAnchor),
             idleMapWrapper.trailingAnchor.constraint(equalTo: idleContainer.trailingAnchor),
-            idleMapWrapper.heightAnchor.constraint(equalToConstant: 340),
+            // Ya no una altura fija — el mapa ocupa todo lo que sobra por
+            // encima de la tarjeta de moto + botón de empezar (que ahora,
+            // sin los dos botones secundarios que había debajo, también
+            // dejan más hueco libre).
+            idleMapWrapper.bottomAnchor.constraint(equalTo: contentStack.topAnchor, constant: -16),
 
-            contentStack.topAnchor.constraint(equalTo: idleMapWrapper.bottomAnchor, constant: 16),
             contentStack.leadingAnchor.constraint(equalTo: idleContainer.leadingAnchor, constant: 16),
             contentStack.trailingAnchor.constraint(equalTo: idleContainer.trailingAnchor, constant: -16),
             contentStack.bottomAnchor.constraint(
-                lessThanOrEqualTo: idleContainer.safeAreaLayoutGuide.bottomAnchor, constant: -12),
+                equalTo: idleContainer.safeAreaLayoutGuide.bottomAnchor, constant: -12),
         ])
     }
 
@@ -285,20 +301,6 @@ final class RegisterViewController: UIViewController {
             row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -13),
         ])
         return card
-    }
-
-    private func secondaryButton(title: String, action: Selector) -> UIButton {
-        let button = UIButton(type: .system)
-        button.setTitle(title, for: .normal)
-        button.setTitleColor(AppTheme.textSecondary(0.8), for: .normal)
-        button.titleLabel?.font = AppFont.body(14, .semibold)
-        button.backgroundColor = AppTheme.cardBackground
-        button.layer.cornerRadius = 16
-        button.layer.borderWidth = 1
-        button.layer.borderColor = AppTheme.cardBorder.cgColor
-        button.heightAnchor.constraint(equalToConstant: 56).isActive = true
-        button.addTarget(self, action: action, for: .touchUpInside)
-        return button
     }
 
     // MARK: - Estado "grabando" (is.recActive)
@@ -563,29 +565,6 @@ final class RegisterViewController: UIViewController {
             })
             present(alert, animated: true)
         }
-    }
-
-    // MARK: - Accesos rápidos "Seguir una ruta" / "Rodar en grupo"
-
-    @objc private func onFollowRouteTapped() {
-        let list = RouteListViewController(screenTitle: "Elige una ruta", showsTopBar: false) {
-            try await RouteRepository().getPublicRoutes()
-        }
-        presentAsClosableModal(list)
-    }
-
-    @objc private func onGroupRideTapped() {
-        presentAsClosableModal(MeetupsViewController())
-    }
-
-    private func presentAsClosableModal(_ root: UIViewController) {
-        root.navigationItem.leftBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .close, target: self, action: #selector(onDismissModal))
-        present(UINavigationController(rootViewController: root), animated: true)
-    }
-
-    @objc private func onDismissModal() {
-        presentedViewController?.dismiss(animated: true)
     }
 
     // MARK: - Grabar ruta

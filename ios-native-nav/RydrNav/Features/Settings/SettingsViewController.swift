@@ -8,6 +8,7 @@ import UIKit
 /// lib/features/settings/presentation/settings_screen.dart.
 final class SettingsViewController: UIViewController {
     private let avatarButton = UIButton(type: .system)
+    private let avatarSpinner = UIActivityIndicatorView(style: .medium)
     private let usernameLabel = UILabel()
     private let emailLabel = UILabel()
     private let privacySwitch = UISwitch()
@@ -29,6 +30,16 @@ final class SettingsViewController: UIViewController {
         avatarButton.widthAnchor.constraint(equalToConstant: 96).isActive = true
         avatarButton.heightAnchor.constraint(equalToConstant: 96).isActive = true
         avatarButton.addTarget(self, action: #selector(onPickAvatar), for: .touchUpInside)
+
+        avatarSpinner.color = AppTheme.primary
+        avatarSpinner.hidesWhenStopped = true
+        avatarSpinner.translatesAutoresizingMaskIntoConstraints = false
+        avatarSpinner.isUserInteractionEnabled = false
+        avatarButton.addSubview(avatarSpinner)
+        NSLayoutConstraint.activate([
+            avatarSpinner.centerXAnchor.constraint(equalTo: avatarButton.centerXAnchor),
+            avatarSpinner.centerYAnchor.constraint(equalTo: avatarButton.centerYAnchor),
+        ])
 
         let changePhotoLabel = UILabel()
         changePhotoLabel.text = "Toca para cambiar la foto"
@@ -79,11 +90,20 @@ final class SettingsViewController: UIViewController {
         usernameLabel.text = user.username
         emailLabel.text = user.email
         privacySwitch.isOn = user.isPrivate
-        avatarButton.setImage(UIImage(systemName: "person.circle.fill"), for: .normal)
+        // Tamaño exacto del botón — a diferencia de un UIImageView normal,
+        // UIButton.setImage no escala la imagen a su propio tamaño.
+        // `.alwaysOriginal`: sin esto, un UIButton(type: .system) trata la
+        // imagen como plantilla y la tiñe entera con `tintColor` (el
+        // ámbar de marca) — tanto esta como la foto real de perfil se
+        // veían como un círculo ámbar liso, sin ningún detalle propio.
+        avatarButton.setImage(
+            RemoteImageView.initialsAvatar(for: user.username, size: CGSize(width: 96, height: 96))
+                .withRenderingMode(.alwaysOriginal),
+            for: .normal)
         if let avatarUrl = user.avatarUrl, let url = RemoteImageView.resolvedURL(avatarUrl) {
             URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
                 guard let data, let image = UIImage(data: data) else { return }
-                DispatchQueue.main.async { self?.avatarButton.setImage(image, for: .normal) }
+                DispatchQueue.main.async { self?.avatarButton.setImage(image.withRenderingMode(.alwaysOriginal), for: .normal) }
             }.resume()
         }
     }
@@ -189,13 +209,50 @@ extension SettingsViewController: PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
         guard let provider = results.first?.itemProvider, provider.canLoadObject(ofClass: UIImage.self) else { return }
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let image = object as? UIImage else { return }
+
+        avatarSpinner.startAnimating()
+        avatarButton.isEnabled = false
+
+        provider.loadObject(ofClass: UIImage.self) { [weak self] object, error in
+            guard let self else { return }
+            guard let image = object as? UIImage else {
+                // Antes se ignoraba en silencio: si esto fallaba (formato
+                // no soportado, HEIC corrupto...) no pasaba nada visible y
+                // parecía que la app "no dejaba" cambiar la foto.
+                DispatchQueue.main.async {
+                    self.avatarSpinner.stopAnimating()
+                    self.avatarButton.isEnabled = true
+                    self.showError("No se pudo leer la foto elegida\(error.map { ": \($0.localizedDescription)" } ?? ".")")
+                }
+                return
+            }
             Task {
-                guard let url = try? await UploadsRepository().uploadImage(image) else { return }
-                try? await AuthManager.shared.updateProfile(avatarUrl: url)
-                DispatchQueue.main.async { self?.populate() }
+                do {
+                    let url = try await UploadsRepository().uploadImage(image)
+                    try await AuthManager.shared.updateProfile(avatarUrl: url)
+                    await MainActor.run {
+                        self.avatarSpinner.stopAnimating()
+                        self.avatarButton.isEnabled = true
+                        self.populate()
+                    }
+                } catch {
+                    // Antes, tanto la subida como la actualización de
+                    // perfil iban con `try?`: si cualquiera de las dos
+                    // fallaba (sin red, IP de desarrollo desactualizada,
+                    // token caducado...) no se avisaba de nada.
+                    await MainActor.run {
+                        self.avatarSpinner.stopAnimating()
+                        self.avatarButton.isEnabled = true
+                        self.showError("No se pudo actualizar la foto de perfil: \(error.localizedDescription)")
+                    }
+                }
             }
         }
+    }
+
+    private func showError(_ message: String) {
+        let alert = UIAlertController(title: "Vaya", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }

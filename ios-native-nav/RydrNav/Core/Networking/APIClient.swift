@@ -82,7 +82,7 @@ final class APIClient {
             req.httpBody = try JSONSerialization.data(withJSONObject: body)
         }
 
-        let (data, response) = try await session.data(for: req)
+        let (data, response) = try await session.data(for: req, delegate: nil)
         guard let http = response as? HTTPURLResponse else {
             throw APIError(message: "Respuesta inválida del servidor")
         }

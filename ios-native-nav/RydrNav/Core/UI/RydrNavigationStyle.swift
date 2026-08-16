@@ -15,14 +15,6 @@ import UIKit
 private func applyRydrBrand(for traitCollection: UITraitCollection) {
     let brand = AppTheme.primary
 
-    // Botones flotantes (silenciar voz, overview, feedback...).
-    FloatingButton.appearance(for: traitCollection).tintColor = brand
-
-    // Botones de reanudar/volver que aparecen al arrastrar el mapa o
-    // volver de la vista de pasos.
-    ResumeButton.appearance(for: traitCollection).tintColor = brand
-    BackButton.appearance(for: traitCollection).tintColor = brand
-
     // Banner superior de instrucciones: fondo ámbar sólido a todo lo
     // ancho, como el "modo en marcha" de Claude Design (exploración
     // 1f-C, "banner de giro naranja completo") — el mismo naranja de
@@ -48,6 +40,16 @@ private func applyRydrBrand(for traitCollection: UITraitCollection) {
     PrimaryLabel.appearance(for: traitCollection).normalTextColor = AppTheme.bg0
     SecondaryLabel.appearance(for: traitCollection).normalTextColor = AppTheme.bg0.withAlphaComponent(0.7)
 
+    // Fila de carriles justo debajo del banner — el SDK la deja con su
+    // azul por defecto si no se toca, que es justo lo que se veía en
+    // vez del oscuro de la app (capturas de prueba en dispositivo real).
+    // Fondo oscuro (no ámbar — ya hay bastante ámbar en el banner de
+    // arriba) con la flecha del carril que toca coger en ámbar y el
+    // resto atenuadas, como cualquier app de navegación real.
+    LanesView.appearance(for: traitCollection).backgroundColor = AppTheme.bg1
+    LaneView.appearance(for: traitCollection).primaryColor = brand
+    LaneView.appearance(for: traitCollection).secondaryColor = AppTheme.textSecondary(0.3)
+
     // La flecha de giro de la tarjeta de instrucciones (vista de pasos)
     // y del banner "Después: X" sigue sobre fondo oscuro, así que ahí
     // se queda en ámbar.
@@ -57,9 +59,42 @@ private func applyRydrBrand(for traitCollection: UITraitCollection) {
         .primaryColor = brand
     ManeuverView.appearance(for: traitCollection, whenContainedInInstancesOf: [StepInstructionsView.self])
         .primaryColor = brand
+    // El propio banner "Después: X" — cristal oscuro con blur en el mock
+    // (`rgba(11,12,14,.88)`); sin `UIVisualEffectView` de por medio, el
+    // color plano más parecido es el mismo fondo elevado que usa el
+    // resto de tarjetas de la app.
+    NextBannerView.appearance(for: traitCollection).backgroundColor = AppTheme.bg1.withAlphaComponent(0.92)
 
-    // "6 min" de tiempo restante en el banner inferior (que sigue oscuro).
+    // "6 min" de tiempo restante en el banner inferior.
     TimeRemainingLabel.appearance(for: traitCollection).normalTextColor = brand
+    DistanceRemainingLabel.appearance(for: traitCollection).normalTextColor = AppTheme.text
+    ArrivalTimeLabel.appearance(for: traitCollection).normalTextColor = AppTheme.text
+    BottomBannerView.appearance(for: traitCollection).backgroundColor = AppTheme.bg1
+    BottomPaddingView.appearance(for: traitCollection).backgroundColor = AppTheme.bg1
+
+    // Botón de cancelar/salir del banner inferior — cuadrado ámbar
+    // translúcido con icono ámbar, como en el mock (en vez del círculo
+    // blanco por defecto del SDK que salía en las pruebas).
+    CancelButton.appearance(for: traitCollection).backgroundColor = brand.withAlphaComponent(0.14)
+    CancelButton.appearance(for: traitCollection).cornerRadius = 14
+    CancelButton.appearance(for: traitCollection).borderColor = brand.withAlphaComponent(0.4)
+    CancelButton.appearance(for: traitCollection).borderWidth = 1
+    CancelButton.appearance(for: traitCollection).tintColor = brand
+
+    // Botones flotantes sobre el mapa (vista 3D, brújula, overview,
+    // silenciar voz, reportar) — cristal oscuro con icono claro, como
+    // los "3D"/brújula del mock, en vez de círculos de color por
+    // defecto del SDK.
+    FloatingButton.appearance(for: traitCollection).tintColor = AppTheme.text
+    FloatingButton.appearance(for: traitCollection).backgroundColor = UIColor.black.withAlphaComponent(0.55)
+    FloatingButton.appearance(for: traitCollection).cornerRadius = 13
+    FloatingButton.appearance(for: traitCollection).borderColor = UIColor.white.withAlphaComponent(0.12)
+    FloatingButton.appearance(for: traitCollection).borderWidth = 1
+
+    // Botones de reanudar/volver que aparecen al arrastrar el mapa o
+    // volver de la vista de pasos.
+    ResumeButton.appearance(for: traitCollection).tintColor = brand
+    BackButton.appearance(for: traitCollection).tintColor = brand
 }
 
 // `Style.traitCollection` es `internal` al módulo del SDK y no es accesible
@@ -72,17 +107,19 @@ private let phoneAndPadTraitCollection = UITraitCollection(traitsFrom: [
 
 // `StandardDayStyle`/`StandardNightStyle` usan por defecto el estilo
 // "Standard Navigation" de Mapbox (`mapbox://styles/mapbox-dash/standard-navigation`),
-// que no es el mismo que `.outdoors` (el que se usa en el resto de mapas de
-// la app: Rutas, Registrar, vista previa...) y además cambia de paleta según
-// su "light preset" interno — de ahí el salto de blanquecino a azul oscuro
-// justo al arrancar la guía. Forzamos el mismo `.outdoors` aquí para que el
-// mapa se vea consistente en toda la app, también durante la navegación.
-private let outdoorsMapStyleURL = URL(string: "mapbox://styles/mapbox/outdoors-v12")!
+// que cambia de paleta según su "light preset" interno — de ahí el salto de
+// blanquecino a azul oscuro justo al arrancar la guía que se veía antes.
+// El mapa de "modo navegación" del prototipo de Claude Design es oscuro
+// (`#0D1013`) igual que el resto de la app, así que aquí se usa `dark-v11`
+// —el mismo estilo que ya usan las miniaturas de las tarjetas de ruta
+// (`RouteMapSnapshot`)— y no `.outdoors` (claro, el que usan Rutas/
+// Registrar/vista previa: ahí sí hace falta ver el terreno real).
+private let navigationMapStyleURL = URL(string: "mapbox://styles/mapbox/dark-v11")!
 
 final class RydrDayStyle: StandardDayStyle {
     override func apply() {
-        mapStyleURL = outdoorsMapStyleURL
-        previewMapStyleURL = outdoorsMapStyleURL
+        mapStyleURL = navigationMapStyleURL
+        previewMapStyleURL = navigationMapStyleURL
         super.apply()
         applyRydrBrand(for: phoneAndPadTraitCollection)
     }
@@ -90,8 +127,8 @@ final class RydrDayStyle: StandardDayStyle {
 
 final class RydrNightStyle: StandardNightStyle {
     override func apply() {
-        mapStyleURL = outdoorsMapStyleURL
-        previewMapStyleURL = outdoorsMapStyleURL
+        mapStyleURL = navigationMapStyleURL
+        previewMapStyleURL = navigationMapStyleURL
         super.apply()
         applyRydrBrand(for: phoneAndPadTraitCollection)
     }

@@ -77,7 +77,7 @@ final class RiderProfileHeaderCell: UICollectionViewCell {
     func configure(with profile: RiderProfile) {
         nameLabel.text = profile.username
         handleLabel.styleAsLabel("@\(profile.username)", size: 12, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.9)
-        avatarView.load(urlString: profile.avatarUrl, placeholder: UIImage(systemName: "person.circle.fill"))
+        avatarView.loadAvatar(urlString: profile.avatarUrl, displayName: profile.username)
 
         statsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         let totalKm = profile.recentRoutes.reduce(0) { $0 + $1.distanceKm }

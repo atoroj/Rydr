@@ -46,15 +46,24 @@ final class RouteCardCell: UICollectionViewCell {
 
         statsRow.axis = .horizontal
         statsRow.spacing = 22
+        statsRow.translatesAutoresizingMaskIntoConstraints = false
 
-        let textStack = UIStackView(arrangedSubviews: [nameLabel, metaLabel, statsRow])
+        // `statsRow` fuera de `textStack` a propósito: dentro, la
+        // alineación `.fill` (por defecto en un UIStackView vertical) lo
+        // estiraba a todo el ancho de la tarjeta, y como su distribución
+        // interna es `.fill` también, ese ancho de más se lo quedaba
+        // "MIN" empujándolo al borde derecho mientras "KM" se quedaba
+        // pegado a la izquierda — con un hueco muerto en medio. Puesto
+        // aparte, con su propio ancho natural anclado al borde derecho,
+        // los dos grupos quedan juntos como se pide.
+        let textStack = UIStackView(arrangedSubviews: [nameLabel, metaLabel])
         textStack.axis = .vertical
         textStack.spacing = 3
-        textStack.setCustomSpacing(11, after: metaLabel)
         textStack.translatesAutoresizingMaskIntoConstraints = false
 
         card.addSubview(coverImage)
         card.addSubview(textStack)
+        card.addSubview(statsRow)
         NSLayoutConstraint.activate([
             coverImage.topAnchor.constraint(equalTo: card.topAnchor),
             coverImage.leadingAnchor.constraint(equalTo: card.leadingAnchor),
@@ -63,8 +72,12 @@ final class RouteCardCell: UICollectionViewCell {
 
             textStack.topAnchor.constraint(equalTo: coverImage.bottomAnchor, constant: 12),
             textStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 13),
-            textStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -13),
-            textStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -13),
+            textStack.trailingAnchor.constraint(lessThanOrEqualTo: card.trailingAnchor, constant: -13),
+
+            statsRow.topAnchor.constraint(equalTo: textStack.bottomAnchor, constant: 11),
+            statsRow.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -13),
+            statsRow.leadingAnchor.constraint(greaterThanOrEqualTo: card.leadingAnchor, constant: 13),
+            statsRow.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -13),
         ])
     }
 

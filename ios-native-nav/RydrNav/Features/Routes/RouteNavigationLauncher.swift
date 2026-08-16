@@ -1,3 +1,4 @@
+import Combine
 import CoreLocation
 import MapboxDirections
 import MapboxMaps
@@ -189,6 +190,14 @@ final class RouteNavigationLauncher: NSObject {
         let brandedMapView = NavigationMapView(
             location: navigation.locationMatching.map { $0.enhancedLocation }.eraseToAnyPublisher(),
             routeProgress: navigation.routeProgress.map { $0?.routeProgress }.eraseToAnyPublisher(),
+            // El init sin `routeRefreshing:` está obsoleto. El propio SDK
+            // lo calcula internamente comparando rutas consecutivas, pero
+            // esa comparación (`NavigationRoutes.areRefreshed`) es interna
+            // del framework, no la podemos llamar desde aquí — un
+            // publisher vacío (sin refrescos "en directo" de tráfico) es
+            // la alternativa pública más cercana, y no perdemos nada que
+            // ya estuviéramos usando antes (no dependíamos de ese evento).
+            routeRefreshing: Empty<RefreshingStatus, Never>().eraseToAnyPublisher(),
             heading: navigation.heading,
             predictiveCacheManager: nil
         )
@@ -210,6 +219,14 @@ final class RouteNavigationLauncher: NSObject {
         brandedMapView.routeCasingColor = AppTheme.primary.withAlphaComponent(0.6)
         brandedMapView.maneuverArrowColor = AppTheme.primary
 
+        // Banners propios en vez de los del SDK — la maquetación de los
+        // suyos (constraints privadas) no deja meterles las etiquetas
+        // "RESTANTE"/"LLEGADA" ni un botón "Siguiente" como pide el "modo
+        // navegación" de Claude Design. Ver el doc de cada clase para el
+        // único hueco de fidelidad real: la matrícula de carretera sale
+        // como texto normal, no como recuadro tipo señal.
+        let bottomBanner = RydrBottomBannerViewController()
+
         let navigationOptions = NavigationOptions(
             mapboxNavigation: navigationProvider.mapboxNavigation,
             voiceController: navigationProvider.routeVoiceController,
@@ -221,6 +238,8 @@ final class RouteNavigationLauncher: NSObject {
             // uno a otro solo según la hora del día — un salto de look
             // que no pasa en ninguna otra pantalla de Rydr.
             styles: [RydrNightStyle()],
+            topBanner: RydrTopBannerViewController(),
+            bottomBanner: bottomBanner,
             navigationMapView: brandedMapView
         )
         let navigationViewController = NavigationViewController(
@@ -228,14 +247,41 @@ final class RouteNavigationLauncher: NSObject {
             navigationOptions: navigationOptions
         )
         navigationViewController.delegate = delegate
+        // El botón de cancelar del banner propio no pasa por el mecanismo
+        // interno del SDK (`BottomBannerViewControllerDelegate`) — sin
+        // esto, se cerraba la guía pero no se limpiaba el estado de un
+        // tramo de aproximación en curso ni se encadenaba el trazado
+        // exacto si tocaba.
+        bottomBanner.onCancelTapped = { [weak self, weak navigationViewController] in
+            guard let self, let navigationViewController else { return }
+            self.dismissNavigation(navigationViewController)
+        }
         navigationViewController.modalPresentationStyle = .fullScreen
         viewController.present(navigationViewController, animated: true)
+    }
+
+    /// Compartido entre el botón de cancelar del banner propio y
+    /// `navigationViewControllerDidDismiss` (que sigue haciendo falta por
+    /// si el SDK dispara el cierre por su cuenta, p. ej. desde CarPlay) —
+    /// si se cancela la aproximación a medias, no se sigue con el trazado
+    /// exacto después.
+    private func dismissNavigation(_ navigationViewController: NavigationViewController) {
+        pendingRoute = nil
+        pendingPresenter = nil
+        navigationViewController.dismiss(animated: true)
     }
 }
 
 // MARK: - CLLocationManagerDelegate (posición actual, one-shot)
 
-extension RouteNavigationLauncher: CLLocationManagerDelegate {
+// `@preconcurrency`: el protocolo no está aislado a `@MainActor` (lo llama
+// el SDK de CoreLocation, que en la práctica siempre despacha en el hilo
+// principal salvo que se configure una `delegateQueue` explícita, cosa que
+// no hacemos), pero como esta clase entera sí lo está, el compilador no
+// puede comprobarlo por su cuenta — sin esto, cruzar a código aislado a
+// main actor desde una conformidad no aislada avisa ahora y en Swift 6
+// sería un error.
+extension RouteNavigationLauncher: @preconcurrency CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         locationContinuation?.resume(returning: locations.last?.coordinate)
         locationContinuation = nil
@@ -249,7 +295,11 @@ extension RouteNavigationLauncher: CLLocationManagerDelegate {
 
 // MARK: - NavigationViewControllerDelegate (fin del tramo de aproximación)
 
-extension RouteNavigationLauncher: NavigationViewControllerDelegate {
+// Mismo motivo que en la conformidad de CLLocationManagerDelegate de
+// arriba — el SDK de navegación llama a su delegado desde el hilo
+// principal (es puramente de UI), pero el protocolo en sí no lleva la
+// anotación `@MainActor`.
+extension RouteNavigationLauncher: @preconcurrency NavigationViewControllerDelegate {
     func navigationViewController(_ navigationViewController: NavigationViewController, didArriveAt waypoint: Waypoint) {
         guard let route = pendingRoute, let presenter = pendingPresenter else { return }
         pendingRoute = nil
@@ -268,10 +318,6 @@ extension RouteNavigationLauncher: NavigationViewControllerDelegate {
     /// delegado (necesario para saber cuándo se llega al inicio) el SDK
     /// asume "ya se encarga la app de cerrarlo" y se queda quieto.
     func navigationViewControllerDidDismiss(_ navigationViewController: NavigationViewController, byCanceling canceled: Bool) {
-        // Si se cancela la aproximación a medias, no se sigue con el
-        // trazado exacto después.
-        pendingRoute = nil
-        pendingPresenter = nil
-        navigationViewController.dismiss(animated: true)
+        dismissNavigation(navigationViewController)
     }
 }

@@ -34,7 +34,7 @@ struct UploadsRepository {
         }
         request.httpBody = body
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request, delegate: nil)
         guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else {
             throw APIError(message: "No se pudo subir la imagen")
         }

@@ -9,7 +9,16 @@ import UIKit
 extension UIViewController {
     func installTopBar() {
         let avatarButton = UIButton(type: .system)
-        avatarButton.frame = CGRect(x: 0, y: 0, width: 36, height: 36)
+        // Antes solo se fijaba `.frame`, sin constraints — bastaba con
+        // `UIBarButtonItem(customView:)` para que Auto Layout lo
+        // recalculara según el `intrinsicContentSize` del botón (que
+        // depende de la imagen puesta), así que en cuanto la imagen de
+        // iniciales pasó a generarse a 200×200 (para verse nítida en
+        // avatares grandes de toda la app) el botón se salía de su
+        // tamaño de 36pt en vez de quedarse recortado a él.
+        avatarButton.translatesAutoresizingMaskIntoConstraints = false
+        avatarButton.widthAnchor.constraint(equalToConstant: 36).isActive = true
+        avatarButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
         avatarButton.layer.cornerRadius = 18
         avatarButton.clipsToBounds = true
         avatarButton.layer.borderWidth = 1.5
@@ -56,37 +65,31 @@ extension UIViewController {
 
     private func refreshAvatarButton(_ button: UIButton) {
         guard let user = AuthManager.shared.currentUser else { return }
-        let placeholder = initialPlaceholder(for: user.username)
-        button.setImage(placeholder, for: .normal)
+        // `RemoteImageView.initialsAvatar` — mismo dibujo de iniciales
+        // (nombre+apellido en ámbar) que usa el resto de avatares de la
+        // app, no una versión propia solo para la top bar. Con el tamaño
+        // exacto del botón: a diferencia de un `UIImageView` normal (que
+        // sí escala su imagen al tamaño de la vista según `contentMode`),
+        // un `UIButton.setImage` centra la imagen a su tamaño natural sin
+        // escalarla — con el tamaño de referencia grande (200×200) que
+        // usa el resto de avatares se veía solo un recorte diminuto sin
+        // escalar del centro de la imagen.
+        // `.alwaysOriginal`: un `UIButton(type: .system)` trata cualquier
+        // imagen puesta con `setImage` como plantilla por defecto y la
+        // tiñe entera con `tintColor` (aquí, el ámbar de marca) — sin
+        // esto, tanto el degradado+letra como la foto real de perfil se
+        // veían como un círculo ámbar liso, sin ningún detalle propio.
+        button.setImage(
+            RemoteImageView.initialsAvatar(for: user.username, size: CGSize(width: 36, height: 36))
+                .withRenderingMode(.alwaysOriginal),
+            for: .normal)
         guard let avatarUrl = user.avatarUrl, !avatarUrl.isEmpty,
               let url = RemoteImageView.resolvedURL(avatarUrl)
         else { return }
         URLSession.shared.dataTask(with: url) { data, _, _ in
             guard let data, let image = UIImage(data: data) else { return }
-            DispatchQueue.main.async { button.setImage(image, for: .normal) }
+            DispatchQueue.main.async { button.setImage(image.withRenderingMode(.alwaysOriginal), for: .normal) }
         }.resume()
-    }
-
-    /// Iniciales sobre el degradado cálido→frío que usa el mock para el
-    /// avatar sin foto (`linear-gradient(150deg,#3a2a22,#1b1e23)`).
-    private func initialPlaceholder(for username: String) -> UIImage {
-        let size = CGSize(width: 36, height: 36)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { ctx in
-            let colors = [UIColor(hex: 0x3A2A22).cgColor, UIColor(hex: 0x1B1E23).cgColor]
-            let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors as CFArray, locations: [0, 1])!
-            ctx.cgContext.drawLinearGradient(
-                gradient, start: .zero, end: CGPoint(x: size.width, y: size.height), options: [])
-
-            let initial = String(username.prefix(1)).uppercased()
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: AppFont.body(15, .semibold), .foregroundColor: UIColor(hex: 0xFFC768),
-            ]
-            let textSize = initial.size(withAttributes: attrs)
-            initial.draw(
-                at: CGPoint(x: (size.width - textSize.width) / 2, y: (size.height - textSize.height) / 2),
-                withAttributes: attrs)
-        }
     }
 
     @objc private func onAvatarTapped() {

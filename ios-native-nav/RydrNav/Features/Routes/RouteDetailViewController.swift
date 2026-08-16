@@ -177,7 +177,7 @@ final class RouteDetailViewController: UIViewController {
         var meta = profile.currentMotorbike?.displayName ?? ""
         if profile.followStatus == "self" { meta = meta.isEmpty ? "Tu ruta" : "\(meta) · tu ruta" }
         publisherMetaLabel.styleAsLabel(meta, size: 11.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.6)
-        publisherAvatar.load(urlString: profile.avatarUrl, placeholder: UIImage(systemName: "person.circle.fill"))
+        publisherAvatar.loadAvatar(urlString: profile.avatarUrl, displayName: profile.username)
         publisherRow.isHidden = false
     }
 
@@ -191,11 +191,16 @@ final class RouteDetailViewController: UIViewController {
         polyline.lineWidth = 4
         manager.annotations = [polyline]
 
-        let camera = mapView.mapboxMap.camera(
-            for: coordinates,
-            padding: UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24),
-            bearing: nil, pitch: nil)
-        mapView.mapboxMap.setCamera(to: camera)
+        // `camera(for:padding:bearing:pitch:)` está obsoleto — la versión
+        // nueva pide una `CameraOptions` base (vacía = usa lo que ya
+        // tenga el mapa, igual que antes al no fijar bearing/pitch).
+        if let camera = try? mapView.mapboxMap.camera(
+            for: coordinates, camera: CameraOptions(),
+            coordinatesPadding: UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24),
+            maxZoom: nil, offset: nil)
+        {
+            mapView.mapboxMap.setCamera(to: camera)
+        }
     }
 
     private func statCard(value: String, label: String) -> UIView {
