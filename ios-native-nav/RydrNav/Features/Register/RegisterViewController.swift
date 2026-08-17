@@ -73,7 +73,12 @@ final class RegisterViewController: UIViewController {
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
 
-        Task { await loadBikes() }
+        Task {
+            await loadBikes()
+            // Después de cargar el garaje, no antes: para reconocer la moto
+            // de la grabación pendiente hace falta tener ya `bikes` relleno.
+            await offerToResumePendingRide()
+        }
     }
 
     // MARK: - Mapa compartido
@@ -632,6 +637,7 @@ final class RegisterViewController: UIViewController {
             totalElevationGainMeters = 0
             lastAltitude = nil
             rideStartDate = Date()
+            UserDefaults.standard.set(ride.id, forKey: Self.pendingRideIdKey)
             activeBikeLabel.styleAsLabel(bike.displayName, size: 12.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.9)
             stateLabel.styleAsLabel("Grabando", size: 12.5, medium: true, color: AppTheme.primary, tracking: 1.4)
             switchToActive()
@@ -641,9 +647,103 @@ final class RegisterViewController: UIViewController {
         }
     }
 
+    // MARK: - Recuperar una grabación a medias
+
+    // Solo se guarda el id — el resto del estado (moto, puntos ya
+    // grabados, hora de inicio) se reconstruye pidiéndoselo de nuevo al
+    // backend, que es la fuente de verdad real mientras se está grabando
+    // (cada punto ya se manda al momento, no se acumulan sin guardar).
+    private static let pendingRideIdKey = "com.rydr.pendingRideId"
+
+    private func offerToResumePendingRide() async {
+        guard !isRecording, let pendingId = UserDefaults.standard.object(forKey: Self.pendingRideIdKey) as? Int
+        else { return }
+        guard let ride = try? await rideRepository.getRide(id: pendingId), ride.isActive else {
+            // Ya no existe, o ya se cerró desde otro sitio — nada que
+            // ofrecer, y sin dejar el aviso pegado para la próxima vez.
+            UserDefaults.standard.removeObject(forKey: Self.pendingRideIdKey)
+            return
+        }
+
+        let alert = UIAlertController(
+            title: "Ruta sin terminar",
+            message: "Tienes una grabación en curso desde \(Self.timeFormatter.string(from: ride.startedAt)) "
+                + "que se quedó a medias (\(ride.trackPoints.count) puntos). ¿Continuar o descartarla?",
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Descartar", style: .destructive) { [weak self] _ in
+            Task { await self?.discardPendingRide(ride) }
+        })
+        alert.addAction(UIAlertAction(title: "Continuar", style: .default) { [weak self] _ in
+            self?.resumeRide(ride)
+        })
+        present(alert, animated: true)
+    }
+
+    private func discardPendingRide(_ ride: RideModel) async {
+        // "Descartar" aquí es solo dejar de considerarla activa — a
+        // diferencia del descarte automático de `finishRide` (menos de
+        // `minimumPointsToKeep` puntos), esta puede tener un trazado real
+        // que alguien quiera conservar desde "Mis rides" más tarde, así
+        // que se finaliza, no se borra.
+        _ = try? await rideRepository.finishRide(rideId: ride.id)
+        UserDefaults.standard.removeObject(forKey: Self.pendingRideIdKey)
+    }
+
+    private func resumeRide(_ ride: RideModel) {
+        if let bike = bikes.first(where: { $0.id == ride.motorbikeId }) {
+            selectedBike = bike
+            activeBikeLabel.styleAsLabel(bike.displayName, size: 12.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.9)
+        } else {
+            // No debería pasar (la moto usada ya existía cuando se arrancó
+            // la grabación), pero si pasa no se pierde la ruta por eso —
+            // se sigue grabando igual, solo sin mostrar de qué moto es.
+            activeBikeLabel.text = nil
+        }
+
+        currentRide = ride
+        trackCoordinates = ride.path
+        rideStartDate = ride.startedAt
+        (totalDistanceMeters, totalElevationGainMeters) = Self.recomputeStats(from: ride.trackPoints)
+        lastAltitude = ride.trackPoints.last?.altitude
+
+        stateLabel.styleAsLabel("Grabando", size: 12.5, medium: true, color: AppTheme.primary, tracking: 1.4)
+        switchToActive()
+        redrawTrack()
+        startTimer()
+    }
+
+    /// Mismas reglas que al ir sumando en vivo (`didUpdateLocations`), pero
+    /// aplicadas de una vez sobre el historial ya grabado.
+    private static func recomputeStats(from points: [TrackPointModel]) -> (distance: CLLocationDistance, elevationGain: Double) {
+        var distance: CLLocationDistance = 0
+        var elevationGain: Double = 0
+        var lastAltitude: Double?
+        for (index, point) in points.enumerated() {
+            if index > 0 {
+                let previous = points[index - 1]
+                distance += CLLocation(latitude: previous.latitude, longitude: previous.longitude)
+                    .distance(from: CLLocation(latitude: point.latitude, longitude: point.longitude))
+            }
+            if let altitude = point.altitude {
+                if let last = lastAltitude {
+                    let delta = altitude - last
+                    if delta > 1 { elevationGain += delta }
+                }
+                lastAltitude = altitude
+            }
+        }
+        return (distance, elevationGain)
+    }
+
     /// Por debajo de este número de puntos, el ride se descarta en vez de
     /// guardarse — no hay suficiente trazado como para ser una ruta real.
     private static let minimumPointsToKeep = 10
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
 
     private func finishRide() async {
         guard let ride = currentRide else { return }
@@ -651,6 +751,7 @@ final class RegisterViewController: UIViewController {
             _ = try await rideRepository.finishRide(rideId: ride.id)
             let pointCount = trackCoordinates.count
             currentRide = nil
+            UserDefaults.standard.removeObject(forKey: Self.pendingRideIdKey)
             stopTimer()
             switchToIdle(animated: true)
             // Ya no hace falta que el sistema mantenga la app viva en
@@ -686,6 +787,22 @@ final class RegisterViewController: UIViewController {
             self?.updateActiveStats()
         }
         updateActiveStats()
+    }
+
+    /// Redibuja el trazado entero — tanto al añadir un punto en vivo como
+    /// al reconstruir de golpe el historial de una grabación reanudada.
+    private func redrawTrack() {
+        guard trackCoordinates.count >= 2 else { return }
+        var polyline = PolylineAnnotation(lineCoordinates: trackCoordinates)
+        polyline.lineColor = StyleColor(AppTheme.primary)
+        polyline.lineWidth = 7
+        // Borde oscuro alrededor del trazado ámbar — sin él, la línea se
+        // mezcla con el fondo claro del estilo `outdoors` en zonas de
+        // asfalto/tierra parecidas en tono. Con el borde se recorta igual
+        // de bien sobre calles claras que oscuras.
+        polyline.lineBorderColor = StyleColor(AppTheme.bg0)
+        polyline.lineBorderWidth = 1.6
+        polylineManager?.annotations = [polyline]
     }
 
     private func stopTimer() {
@@ -748,19 +865,7 @@ extension RegisterViewController: CLLocationManagerDelegate {
             lastAltitude = location.altitude
         }
         trackCoordinates.append(coordinate)
-
-        if trackCoordinates.count >= 2 {
-            var polyline = PolylineAnnotation(lineCoordinates: trackCoordinates)
-            polyline.lineColor = StyleColor(AppTheme.primary)
-            polyline.lineWidth = 7
-            // Borde oscuro alrededor del trazado ámbar — sin él, la línea
-            // se mezcla con el fondo claro del estilo `outdoors` en zonas
-            // de asfalto/tierra parecidas en tono. Con el borde se recorta
-            // igual de bien sobre calles claras que oscuras.
-            polyline.lineBorderColor = StyleColor(AppTheme.bg0)
-            polyline.lineBorderWidth = 1.6
-            polylineManager?.annotations = [polyline]
-        }
+        redrawTrack()
 
         Task {
             try? await rideRepository.addTrackPoint(
