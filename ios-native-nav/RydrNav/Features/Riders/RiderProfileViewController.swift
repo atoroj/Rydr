@@ -7,16 +7,19 @@ import UIKit
 /// bar); cuentas privadas que no sigues solo muestran la cabecera + botón
 /// de solicitud.
 final class RiderProfileViewController: UIViewController {
-    private enum Section: Int, CaseIterable { case header, garage, routes }
+    private enum Section: Int, CaseIterable { case header, badges, garage, routes }
 
     private let userId: Int?
     private let repository = RidersRepository()
     private let motorbikeRepository = MotorbikeRepository()
+    private let badgesRepository = BadgesRepository()
 
     private var collectionView: UICollectionView!
     private var profile: RiderProfile?
     private var ownGarage: [MotorbikeModel] = []
+    private var badges: [BadgeModel] = []
     private let headerCellId = "Header"
+    private let badgesCellId = "Badges"
     private let garageCellId = "Garage"
     private let routeCellId = "RouteRow"
 
@@ -96,6 +99,19 @@ final class RiderProfileViewController: UIViewController {
                 let item = NSCollectionLayoutItem(layoutSize: size)
                 let group = NSCollectionLayoutGroup.vertical(layoutSize: size, subitems: [item])
                 return NSCollectionLayoutSection(group: group)
+            case .badges:
+                guard self.hasBadgesContent else {
+                    let emptySize = NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(0.01))
+                    let emptyItem = NSCollectionLayoutItem(layoutSize: emptySize)
+                    let emptyGroup = NSCollectionLayoutGroup.vertical(layoutSize: emptySize, subitems: [emptyItem])
+                    return NSCollectionLayoutSection(group: emptyGroup)
+                }
+                let size = NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .estimated(104))
+                let item = NSCollectionLayoutItem(layoutSize: size)
+                let group = NSCollectionLayoutGroup.vertical(layoutSize: size, subitems: [item])
+                let s = NSCollectionLayoutSection(group: group)
+                s.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 0, bottom: 20, trailing: 0)
+                return s
             case .garage:
                 guard self.hasGarageContent else {
                     let emptySize = NSCollectionLayoutSize(widthDimension: .fractionalWidth(1), heightDimension: .absolute(0.01))
@@ -128,6 +144,7 @@ final class RiderProfileViewController: UIViewController {
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.backgroundColor = .clear
         collectionView.register(RiderProfileHeaderCell.self, forCellWithReuseIdentifier: headerCellId)
+        collectionView.register(RiderBadgesCell.self, forCellWithReuseIdentifier: badgesCellId)
         collectionView.register(RiderGarageCell.self, forCellWithReuseIdentifier: garageCellId)
         collectionView.register(RiderRouteRowCell.self, forCellWithReuseIdentifier: routeCellId)
         collectionView.register(
@@ -151,6 +168,14 @@ final class RiderProfileViewController: UIViewController {
     private var hasRoutesContent: Bool {
         (profile?.isVisible ?? false) && !(profile?.recentRoutes.isEmpty ?? true)
     }
+    // Las insignias en sí nunca están "vacías" (el backend siempre
+    // devuelve las 8, conseguidas o no — ver las que faltan es parte de
+    // la gracia) — el único filtro es la misma visibilidad que ya rige
+    // "Últimas rutas": datos derivados de actividad, mismas reglas de
+    // privacidad para una cuenta que no sigues.
+    private var hasBadgesContent: Bool {
+        profile?.isVisible ?? false
+    }
 
     private func reload() {
         guard let id = resolvedUserId else { return }
@@ -159,6 +184,7 @@ final class RiderProfileViewController: UIViewController {
             if isOwnProfile {
                 ownGarage = (try? await motorbikeRepository.getMotorbikes(userId: id)) ?? []
             }
+            badges = (try? await badgesRepository.badges(userId: id)) ?? []
             collectionView.reloadData()
         }
     }
@@ -188,6 +214,7 @@ extension RiderProfileViewController: UICollectionViewDataSource, UICollectionVi
         guard let section = Section(rawValue: section) else { return 0 }
         switch section {
         case .header: return 1
+        case .badges: return hasBadgesContent ? 1 : 0
         case .garage: return hasGarageContent ? 1 : 0
         case .routes: return hasRoutesContent ? (profile?.recentRoutes.count ?? 0) : 0
         }
@@ -199,6 +226,10 @@ extension RiderProfileViewController: UICollectionViewDataSource, UICollectionVi
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: headerCellId, for: indexPath) as! RiderProfileHeaderCell
             if let profile { cell.configure(with: profile) }
             cell.onActionTapped = { [weak self] in self?.onActionTapped() }
+            return cell
+        case .badges:
+            let cell = collectionView.dequeueReusableCell(withReuseIdentifier: badgesCellId, for: indexPath) as! RiderBadgesCell
+            cell.configure(badges: badges)
             return cell
         case .garage:
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: garageCellId, for: indexPath) as! RiderGarageCell
