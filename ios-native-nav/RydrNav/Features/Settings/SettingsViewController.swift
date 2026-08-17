@@ -60,13 +60,15 @@ final class SettingsViewController: UIViewController {
         privacySwitch.addTarget(self, action: #selector(onPrivacyChanged), for: .valueChanged)
 
         let ridesRow = tappableRow(icon: "clock.arrow.circlepath", title: "Mis rides", action: #selector(onRidesTapped))
+        let offlineMapsRow = tappableRow(
+            icon: "arrow.down.circle", title: "Mapas sin conexión", action: #selector(onOfflineMapsTapped))
         let logoutRow = tappableRow(
             icon: "rectangle.portrait.and.arrow.right", title: "Cerrar sesión",
             action: #selector(onLogoutTapped), destructive: true)
 
         let stack = UIStackView(arrangedSubviews: [
             avatarButton, changePhotoLabel, usernameLabel, emailLabel,
-            spacer(24), privacyRow, divider(), ridesRow, divider(), logoutRow,
+            spacer(24), privacyRow, divider(), ridesRow, divider(), offlineMapsRow, divider(), logoutRow,
         ])
         stack.axis = .vertical
         stack.spacing = 8
@@ -81,6 +83,7 @@ final class SettingsViewController: UIViewController {
             stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 32),
             privacyRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             ridesRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            offlineMapsRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             logoutRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
     }
@@ -191,6 +194,10 @@ final class SettingsViewController: UIViewController {
 
     @objc private func onRidesTapped() {
         navigationController?.pushViewController(RidesHistoryViewController(), animated: true)
+    }
+
+    @objc private func onOfflineMapsTapped() {
+        navigationController?.pushViewController(OfflineMapsViewController(), animated: true)
     }
 
     @objc private func onLogoutTapped() {

@@ -85,7 +85,8 @@ final class RouteDetailViewController: UIViewController {
 
         let googleMapsLink = linkButton("Navegar en Google Maps", action: #selector(onGoogleMapsTapped))
         let exportLink = linkButton("Exportar archivo GPX", action: #selector(onExportTapped))
-        let linksRow = UIStackView(arrangedSubviews: [googleMapsLink, exportLink])
+        let offlineLink = linkButton("Guardar sin conexión", action: #selector(onOfflineTapped))
+        let linksRow = UIStackView(arrangedSubviews: [googleMapsLink, exportLink, offlineLink])
         linksRow.axis = .horizontal
         linksRow.distribution = .fillEqually
 
@@ -293,6 +294,47 @@ final class RouteDetailViewController: UIViewController {
 
         guard let url = URL(string: urlString) else { return }
         UIApplication.shared.open(url)
+    }
+
+    @objc private func onOfflineTapped() {
+        Task {
+            statusLabel.text = "Calculando tamaño…"
+            let estimate = await OfflineMapManager.shared.estimate(for: route)
+            statusLabel.text = nil
+
+            let sizeText: String
+            if let estimate {
+                sizeText = ByteCountFormatter.string(fromByteCount: Int64(estimate.storageSize), countStyle: .file)
+            } else {
+                sizeText = "un tamaño que no se ha podido calcular"
+            }
+
+            let alert = UIAlertController(
+                title: "Guardar para sin conexión",
+                message: "Se descargará el mapa y las carreteras de la zona de esta ruta — \(sizeText). "
+                    + "Podrás navegarla sin datos móviles ni cobertura.",
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
+            alert.addAction(UIAlertAction(title: "Descargar", style: .default) { [weak self] _ in
+                self?.startOfflineDownload()
+            })
+            present(alert, animated: true)
+        }
+    }
+
+    private func startOfflineDownload() {
+        Task {
+            do {
+                try await OfflineMapManager.shared.download(for: route) { [weak self] progress in
+                    Task { @MainActor in
+                        self?.statusLabel.text = "Descargando… \(Int(progress * 100))%"
+                    }
+                }
+                statusLabel.text = "Descarga completa — ya puedes navegar esta ruta sin conexión."
+            } catch {
+                statusLabel.text = "Error al descargar: \(error.localizedDescription)"
+            }
+        }
     }
 
     @objc private func onExportTapped() {

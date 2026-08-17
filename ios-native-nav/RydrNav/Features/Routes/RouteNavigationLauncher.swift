@@ -48,6 +48,17 @@ final class RouteNavigationLauncher: NSObject {
     private let locationManager = CLLocationManager()
     private var locationContinuation: CheckedContinuation<CLLocationCoordinate2D?, Never>?
 
+    /// Descriptor de teselas de rutado (Directions/Map Matching offline) —
+    /// lo usa `OfflineMapManager` para combinarlo con el descriptor de
+    /// estilo al preparar una descarga. Se expone solo esto, no
+    /// `navigationProvider` entero: reutiliza la única instancia de
+    /// `MapboxNavigationProvider` de la app en vez de que otra pantalla
+    /// tenga que crear una segunda (cara, y probablemente conflictiva con
+    /// el motor nativo de navegación).
+    func navigationTilesetDescriptor() -> TilesetDescriptor {
+        navigationProvider.getLatestNavigationTilesetDescriptor()
+    }
+
     override private init() {
         super.init()
         locationManager.delegate = self
