@@ -67,3 +67,30 @@ struct MeetupParticipant: Codable, Equatable, Identifiable {
         case avatarUrl = "avatar_url"
     }
 }
+
+/// Última posición compartida por un participante mientras la quedada está
+/// en marcha — sin historial, solo el punto más reciente. El backend deja
+/// de devolverla pasados ~3 min sin actualizar, así que no hace falta un
+/// "dejar de compartir" explícito: desaparece sola.
+struct MeetupLiveLocation: Codable, Equatable, Identifiable {
+    let userId: Int
+    let username: String
+    let avatarUrl: String?
+    let lat: Double
+    let lng: Double
+    let updatedAt: Date
+
+    var id: Int { userId }
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id"
+        case username
+        case avatarUrl = "avatar_url"
+        case lat, lng
+        case updatedAt = "updated_at"
+    }
+
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: lat, longitude: lng)
+    }
+}

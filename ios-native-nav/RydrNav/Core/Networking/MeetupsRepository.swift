@@ -66,6 +66,16 @@ struct MeetupsRepository {
         try await client.request(.get, "\(APIConstants.meetups)/\(id)/participants")
     }
 
+    func updateLocation(id: Int, coordinate: CLLocationCoordinate2D) async throws {
+        try await client.requestVoid(.post, "\(APIConstants.meetups)/\(id)/location", body: [
+            "lat": coordinate.latitude, "lng": coordinate.longitude,
+        ])
+    }
+
+    func liveLocations(id: Int) async throws -> [MeetupLiveLocation] {
+        try await client.request(.get, "\(APIConstants.meetups)/\(id)/live-locations")
+    }
+
     private func body(
         title: String, description: String?, locationName: String?,
         coordinate: CLLocationCoordinate2D, scheduledAt: Date,
