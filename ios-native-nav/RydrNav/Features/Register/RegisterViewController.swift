@@ -21,6 +21,7 @@ final class RegisterViewController: UIViewController {
     private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
     private var rideStartDate: Date?
     private var recordingTimer: Timer?
+    private let liveActivity = RydrRideLiveActivityController()
 
     // Cifras reales de la grabación en curso — nada de datos de relleno:
     // la distancia sale de sumar la distancia entre puntos consecutivos,
@@ -642,6 +643,7 @@ final class RegisterViewController: UIViewController {
             stateLabel.styleAsLabel("Grabando", size: 12.5, medium: true, color: AppTheme.primary, tracking: 1.4)
             switchToActive()
             startTimer()
+            liveActivity.start(motorbikeName: bike.displayName)
         } catch {
             showAlert(title: "Error", message: error.localizedDescription)
         }
@@ -710,6 +712,7 @@ final class RegisterViewController: UIViewController {
         switchToActive()
         redrawTrack()
         startTimer()
+        liveActivity.start(motorbikeName: selectedBike?.displayName ?? "")
     }
 
     /// Mismas reglas que al ir sumando en vivo (`didUpdateLocations`), pero
@@ -753,6 +756,7 @@ final class RegisterViewController: UIViewController {
             currentRide = nil
             UserDefaults.standard.removeObject(forKey: Self.pendingRideIdKey)
             stopTimer()
+            liveActivity.end()
             switchToIdle(animated: true)
             // Ya no hace falta que el sistema mantenga la app viva en
             // segundo plano por localización.
@@ -820,7 +824,16 @@ final class RegisterViewController: UIViewController {
         kmValueLabel.text = String(format: "%.1f", km)
         elevationValueLabel.text = String(format: "%.0f", totalElevationGainMeters)
         let hours = elapsed / 3600
-        speedValueLabel.text = hours > 0 ? String(format: "%.0f", km / hours) : "0"
+        let speedKmh = hours > 0 ? km / hours : 0
+        speedValueLabel.text = String(format: "%.0f", speedKmh)
+
+        // La Live Activity se actualiza cada 5s, no cada segundo como el
+        // resto de esta pantalla — tiene un presupuesto limitado de
+        // actualizaciones por hora, y nadie necesita el cronómetro de la
+        // pantalla de bloqueo al segundo exacto.
+        if elapsedSeconds % 5 == 0 {
+            liveActivity.update(elapsedSeconds: elapsedSeconds, km: km, speedKmh: speedKmh)
+        }
     }
 
     private func showAlert(title: String, message: String) {

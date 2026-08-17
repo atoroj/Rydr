@@ -55,6 +55,9 @@ targets:
           - BarlowCondensed-Bold.ttf
           - BarlowSemiCondensed-Medium.ttf
           - BarlowSemiCondensed-SemiBold.ttf
+        # Sin esto, iOS ignora en silencio cualquier Activity.request() —
+        # ni error, ni actividad, nada.
+        NSSupportsLiveActivities: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rydr.rydrnav
@@ -83,11 +86,42 @@ targets:
         product: MapboxDirections
       - package: MapboxMapsPackage
         product: MapboxMaps
+      - target: RydrRideWidgets
+        embed: true
+
+  # Live Activity / Dynamic Island mientras se graba una ruta. Target
+  # aparte porque WidgetKit lo exige (una extensión de verdad, no una
+  # pantalla más de la app) — y con deployment target propio en 16.1
+  # (Live Activities no existen antes) aunque la app en sí siga dando
+  # soporte desde iOS 15; ver RydrRideActivityAttributes.swift para cómo
+  # se comparte el mismo tipo con la app sin duplicar el archivo.
+  RydrRideWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.2"
+    sources:
+      - RydrRideWidgets
+      - path: RydrNav/Core/LiveActivity/RydrRideActivityAttributes.swift
+        group: RydrRideWidgets
+    info:
+      path: RydrRideWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: RydrRideWidgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rydr.rydrnav.RydrRideWidgets
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_DEBUG_DYLIB: "NO"
 
 schemes:
   RydrNav:
     build:
       targets:
         RydrNav: all
+        RydrRideWidgets: all
     run:
       config: Debug

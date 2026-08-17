@@ -33,6 +33,8 @@
 	<string>RydrNav necesita tu ubicación en segundo plano para seguir guiándote con la pantalla bloqueada.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>RydrNav necesita tu ubicación para guiarte por la ruta.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Barlow-Regular.ttf</string>
