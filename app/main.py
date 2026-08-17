@@ -13,6 +13,7 @@ from app.rides.infrastructure.ride_router import router as ride_router
 from app.routes.infrastructure.route_router import router as route_router
 from app.riders.infrastructure.follow_router import router as follow_router
 from app.meetups.infrastructure.meetup_router import router as meetup_router
+from app.badges.infrastructure.badge_router import router as badge_router
 # Importar modelos para que SQLAlchemy los registre al crear tablas
 from app.users.infrastructure.user_model import UserModel
 from app.motorbikes.infraestructure.motorbike_model import MotorbikeModel
@@ -48,3 +49,4 @@ app.include_router(route_router)
 app.include_router(uploads_router)
 app.include_router(follow_router)
 app.include_router(meetup_router)
+app.include_router(badge_router)
