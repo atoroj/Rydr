@@ -395,7 +395,8 @@ final class RouteNavigationLauncher: NSObject {
             // uno a otro solo según la hora del día — un salto de look
             // que no pasa en ninguna otra pantalla de Rydr.
             styles: [RydrNightStyle()],
-            topBanner: RydrTopBannerViewController(),
+            topBanner: RydrTopBannerViewController(
+                speedLimitPublisher: navigation.locationMatching.map(\.speedLimit).eraseToAnyPublisher()),
             bottomBanner: bottomBanner,
             navigationMapView: brandedMapView
         )

@@ -1,3 +1,4 @@
+import Combine
 import CoreLocation
 import MapboxDirections
 import MapboxNavigationCore
@@ -73,12 +74,31 @@ final class RydrTopBannerViewController: UIViewController, NavigationComponent {
     private let distanceUnitLabel = UILabel()
     private let instructionLabel = UILabel()
     private let lanesStack = UIStackView()
+    private let speedLimitView = RydrSpeedLimitView()
     private var lanesHeightConstraint: NSLayoutConstraint!
+
+    // El límite de velocidad no llega por `NavigationComponent` (que solo
+    // avisa de progreso de ruta e instrucciones) — es parte de
+    // `MapMatchingState`, el mismo publisher del que ya sale la posición
+    // del puck, así que hace falta suscribirse aparte.
+    private let speedLimitPublisher: AnyPublisher<SpeedLimit, Never>
+    private var cancellables = Set<AnyCancellable>()
+
+    init(speedLimitPublisher: AnyPublisher<SpeedLimit, Never>) {
+        self.speedLimitPublisher = speedLimitPublisher
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) not implemented") }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = AppTheme.primary
         setupUI()
+        speedLimitPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.speedLimitView.update(with: $0) }
+            .store(in: &cancellables)
     }
 
     private func setupUI() {
@@ -117,11 +137,15 @@ final class RydrTopBannerViewController: UIViewController, NavigationComponent {
         lanesHeightConstraint.isActive = true
 
         view.addSubview(topRow)
+        view.addSubview(speedLimitView)
         view.addSubview(lanesStack)
         NSLayoutConstraint.activate([
             topRow.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 10),
             topRow.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            topRow.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -16),
+            topRow.trailingAnchor.constraint(lessThanOrEqualTo: speedLimitView.leadingAnchor, constant: -12),
+
+            speedLimitView.centerYAnchor.constraint(equalTo: topRow.centerYAnchor),
+            speedLimitView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
 
             lanesStack.topAnchor.constraint(equalTo: topRow.bottomAnchor, constant: 12),
             lanesStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
