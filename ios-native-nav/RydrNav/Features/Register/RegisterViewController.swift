@@ -22,6 +22,8 @@ final class RegisterViewController: UIViewController {
     private var rideStartDate: Date?
     private var recordingTimer: Timer?
     private let liveActivity = RydrRideLiveActivityController()
+    private let trackSyncManager = RideTrackSyncManager.shared
+    private var foregroundObserver: NSObjectProtocol?
 
     // Cifras reales de la grabación en curso — nada de datos de relleno:
     // la distancia sale de sumar la distancia entre puntos consecutivos,
@@ -79,6 +81,29 @@ final class RegisterViewController: UIViewController {
             // Después de cargar el garaje, no antes: para reconocer la moto
             // de la grabación pendiente hace falta tener ya `bikes` relleno.
             await offerToResumePendingRide()
+        }
+
+        // Cualquier punto que se quedara en cola local (de esta ruta o de
+        // una anterior ya terminada) por falta de cobertura — sin esperar
+        // a que quien graba vuelva a abrir "Registrar" a mano.
+        trackSyncManager.resumeAllPending()
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            // `queue: .main` ya garantiza que esto se llama en el hilo
+            // principal en tiempo de ejecución, pero el cierre en sí no
+            // está aislado a `@MainActor` de cara al compilador — de ahí
+            // el salto explícito, para poder llamar a `trackSyncManager`
+            // (que sí lo está) sin aviso de Swift 6.
+            Task { @MainActor in
+                self?.trackSyncManager.resumeAllPending()
+            }
+        }
+    }
+
+    deinit {
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
         }
     }
 
@@ -702,30 +727,51 @@ final class RegisterViewController: UIViewController {
             activeBikeLabel.text = nil
         }
 
+        // El backend puede no saber nada de la cola final del todo si el
+        // cierre a medias coincidió con quedarse sin cobertura — se suman
+        // los puntos que `RideTrackSyncManager` todavía tenga pendientes
+        // de mandar para este ride, para que ni el trazado ni las cifras
+        // se vean con un hueco al final por algo que en realidad está a
+        // salvo en el propio móvil.
+        let backendPoints = ride.trackPoints.map { StatsPoint(coordinate: $0.coordinate, altitude: $0.altitude) }
+        let pendingPoints = trackSyncManager.pendingPoints(forRide: ride.id)
+            .map { StatsPoint(coordinate: $0.coordinate, altitude: $0.altitude) }
+        let allPoints = backendPoints + pendingPoints
+
         currentRide = ride
-        trackCoordinates = ride.path
+        trackCoordinates = allPoints.map(\.coordinate)
         rideStartDate = ride.startedAt
-        (totalDistanceMeters, totalElevationGainMeters) = Self.recomputeStats(from: ride.trackPoints)
-        lastAltitude = ride.trackPoints.last?.altitude
+        (totalDistanceMeters, totalElevationGainMeters) = Self.recomputeStats(from: allPoints)
+        lastAltitude = allPoints.last?.altitude
 
         stateLabel.styleAsLabel("Grabando", size: 12.5, medium: true, color: AppTheme.primary, tracking: 1.4)
         switchToActive()
         redrawTrack()
         startTimer()
         liveActivity.start(motorbikeName: selectedBike?.displayName ?? "")
+        trackSyncManager.attemptDrain(rideId: ride.id)
+    }
+
+    /// Punto mínimo común entre `TrackPointModel` (lo que ya sabe el
+    /// backend) y `PendingTrackPoint` (lo que sigue en cola local) — para
+    /// poder recalcular cifras sobre los dos juntos al reanudar una
+    /// grabación a medias.
+    private struct StatsPoint {
+        let coordinate: CLLocationCoordinate2D
+        let altitude: Double?
     }
 
     /// Mismas reglas que al ir sumando en vivo (`didUpdateLocations`), pero
-    /// aplicadas de una vez sobre el historial ya grabado.
-    private static func recomputeStats(from points: [TrackPointModel]) -> (distance: CLLocationDistance, elevationGain: Double) {
+    /// aplicadas de una vez sobre un historial ya grabado.
+    private static func recomputeStats(from points: [StatsPoint]) -> (distance: CLLocationDistance, elevationGain: Double) {
         var distance: CLLocationDistance = 0
         var elevationGain: Double = 0
         var lastAltitude: Double?
         for (index, point) in points.enumerated() {
             if index > 0 {
                 let previous = points[index - 1]
-                distance += CLLocation(latitude: previous.latitude, longitude: previous.longitude)
-                    .distance(from: CLLocation(latitude: point.latitude, longitude: point.longitude))
+                distance += CLLocation(latitude: previous.coordinate.latitude, longitude: previous.coordinate.longitude)
+                    .distance(from: CLLocation(latitude: point.coordinate.latitude, longitude: point.coordinate.longitude))
             }
             if let altitude = point.altitude {
                 if let last = lastAltitude {
@@ -764,12 +810,18 @@ final class RegisterViewController: UIViewController {
             mapView.camera.ease(
                 to: CameraOptions(center: locationManager.location?.coordinate, zoom: 15, bearing: 0),
                 duration: 0.4)
+            // Último intento inmediato por si hay cobertura justo ahora —
+            // si no, sigue en cola y se reintentará sola (temporizador de
+            // la próxima grabación, o al reabrir la app/volver a primer
+            // plano vía `resumeAllPending`).
+            trackSyncManager.attemptDrain(rideId: ride.id)
 
             if pointCount < Self.minimumPointsToKeep {
                 // Se finaliza igual (para liberar el estado "activo" en el
                 // backend) pero no se conserva: muy pocos puntos como para
                 // ser una ruta real.
                 try? await rideRepository.deleteRide(id: ride.id)
+                trackSyncManager.discard(rideId: ride.id)
                 showAlert(
                     title: "Ruta descartada",
                     message: "Solo se grabaron \(pointCount) puntos (mínimo \(Self.minimumPointsToKeep)). No se ha guardado.")
@@ -834,6 +886,14 @@ final class RegisterViewController: UIViewController {
         if elapsedSeconds % 5 == 0 {
             liveActivity.update(elapsedSeconds: elapsedSeconds, km: km, speedKmh: speedKmh)
         }
+
+        // Reintento periódico de la cola local (sin cobertura, los puntos
+        // se han seguido guardando igual — ver `RideTrackSyncManager`) —
+        // cada 15s, no en cada punto: si sigue sin haber señal no tiene
+        // sentido intentarlo cada segundo.
+        if elapsedSeconds % 15 == 0, let rideId = currentRide?.id {
+            trackSyncManager.attemptDrain(rideId: rideId)
+        }
     }
 
     private func showAlert(title: String, message: String) {
@@ -880,12 +940,18 @@ extension RegisterViewController: CLLocationManagerDelegate {
         trackCoordinates.append(coordinate)
         redrawTrack()
 
-        Task {
-            try? await rideRepository.addTrackPoint(
-                rideId: ride.id, latitude: coordinate.latitude, longitude: coordinate.longitude,
-                altitude: location.altitude, speed: location.speed >= 0 ? location.speed * 3.6 : nil,
-                timestamp: location.timestamp)
-        }
+        // Antes se mandaba directo a la red con un `try?` que se tragaba
+        // el error en silencio — sin cobertura (el caso de uso central de
+        // esta app: carretera de montaña), el punto se perdía para
+        // siempre. Ahora se encola primero — nunca falla, nunca espera a
+        // la red — y de ahí se intenta mandar cada 15s desde
+        // `updateActiveStats`, no en cada punto: intentarlo cada 1-3s
+        // mientras no hay cobertura no serviría de nada, solo peticiones
+        // fallidas de más. Ver `RideTrackSyncManager`.
+        trackSyncManager.enqueue(rideId: ride.id, point: PendingTrackPoint(
+            latitude: coordinate.latitude, longitude: coordinate.longitude,
+            altitude: location.altitude, speed: location.speed >= 0 ? location.speed * 3.6 : nil,
+            timestamp: location.timestamp))
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

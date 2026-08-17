@@ -39,6 +39,16 @@ struct RideRepository {
         try await client.requestVoid(.post, "\(APIConstants.rides)/\(rideId)/track-points", body: body)
     }
 
+    /// Reenvía de golpe los puntos que se quedaron en cola local por falta
+    /// de cobertura — ver `RideTrackSyncManager`. `[String: Any]` porque
+    /// cada elemento ya viene formado (mismas claves que `addTrackPoint`)
+    /// desde la propia cola, sin pasar por un `Codable` intermedio.
+    func addTrackPointsBatch(rideId: Int, points: [[String: Any]]) async throws {
+        guard !points.isEmpty else { return }
+        try await client.requestVoid(
+            .post, "\(APIConstants.rides)/\(rideId)/track-points/batch", body: ["points": points])
+    }
+
     func getRides(riderId: Int) async throws -> [RideModel] {
         try await client.request(.get, "\(APIConstants.rides)/rider/\(riderId)")
     }
