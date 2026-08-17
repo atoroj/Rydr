@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 
+from app.rides.application.ride_dto import AddTrackPointRequest
 from app.rides.domain.ride import Ride, TrackPoint
 from app.rides.domain.ride_repository import RideRepository
 
@@ -39,6 +40,23 @@ class RideService:
             timestamp=timestamp,
         )
         return self.repository.add_track_point(track_point)
+
+    def add_track_points(self, ride_id: int, points: List[AddTrackPointRequest]) -> int:
+        """Para reenviar de golpe la cola local del móvil tras recuperar
+        cobertura. Bucle simple sobre `add_track_point` — a la escala de
+        este proyecto (SQLite, uso hobby) un commit por punto no es un
+        problema real; no hace falta un insertado masivo en el repositorio
+        para esto."""
+        for point in points:
+            self.add_track_point(
+                ride_id=ride_id,
+                latitude=point.latitude,
+                longitude=point.longitude,
+                altitude=point.altitude,
+                speed=point.speed,
+                timestamp=point.timestamp,
+            )
+        return len(points)
 
     def finish_ride(self, ride_id: int) -> Optional[Ride]:
         return self.repository.finish_ride(ride_id, datetime.now())

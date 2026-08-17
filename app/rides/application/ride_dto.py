@@ -17,6 +17,17 @@ class AddTrackPointRequest(BaseModel):
     timestamp: datetime
 
 
+class AddTrackPointsBatchRequest(BaseModel):
+    """Para reenviar de golpe los puntos que se quedaron en cola en el
+    móvil por falta de cobertura — en vez de uno a uno, que tras una
+    desconexión larga puede ser cientos de peticiones sueltas."""
+    points: List[AddTrackPointRequest]
+
+
+class AddTrackPointsBatchResponse(BaseModel):
+    created: int
+
+
 class TrackPointResponse(BaseModel):
     id: int
     ride_id: int

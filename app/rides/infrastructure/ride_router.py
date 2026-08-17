@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.rides.application.ride_dto import (
     AddTrackPointRequest,
+    AddTrackPointsBatchRequest,
+    AddTrackPointsBatchResponse,
     RideResponse,
     StartRideRequest,
     TrackPointResponse,
@@ -47,6 +49,19 @@ def add_track_point(
         speed=request.speed,
         timestamp=request.timestamp,
     )
+
+
+@router.post(
+    "/{ride_id}/track-points/batch", response_model=AddTrackPointsBatchResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def add_track_points_batch(
+    ride_id: int,
+    request: AddTrackPointsBatchRequest,
+    service: RideService = Depends(get_service),
+):
+    created = service.add_track_points(ride_id, request.points)
+    return AddTrackPointsBatchResponse(created=created)
 
 
 @router.get("/rider/{rider_id}", response_model=List[RideResponse])

@@ -62,6 +62,36 @@ def test_add_track_point(client):
     assert data["speed"] == 45.2
 
 
+# --- Tests: track points en lote (reenvío tras recuperar cobertura) ---
+
+def test_add_track_points_batch(client):
+    rider_id, motorbike_id = create_user_and_motorbike(client)
+    ride_id = client.post("/rides/", json={"rider_id": rider_id, "motorbike_id": motorbike_id}).json()["id"]
+
+    response = client.post(f"/rides/{ride_id}/track-points/batch", json={"points": [
+        {"latitude": 40.40, "longitude": -3.70, "timestamp": "2025-06-01T10:00:00"},
+        {"latitude": 40.41, "longitude": -3.71, "altitude": 650.0, "speed": 52.3, "timestamp": "2025-06-01T10:00:05"},
+        {"latitude": 40.42, "longitude": -3.72, "timestamp": "2025-06-01T10:00:10"},
+    ]})
+
+    assert response.status_code == 201
+    assert response.json() == {"created": 3}
+
+    ride = client.get(f"/rides/{ride_id}").json()
+    assert len(ride["track_points"]) == 3
+    assert ride["track_points"][1]["speed"] == 52.3
+
+
+def test_add_track_points_batch_empty(client):
+    rider_id, motorbike_id = create_user_and_motorbike(client)
+    ride_id = client.post("/rides/", json={"rider_id": rider_id, "motorbike_id": motorbike_id}).json()["id"]
+
+    response = client.post(f"/rides/{ride_id}/track-points/batch", json={"points": []})
+
+    assert response.status_code == 201
+    assert response.json() == {"created": 0}
+
+
 def test_get_ride_includes_track_points(client):
     rider_id, motorbike_id = create_user_and_motorbike(client)
     ride_id = client.post("/rides/", json={"rider_id": rider_id, "motorbike_id": motorbike_id}).json()["id"]
