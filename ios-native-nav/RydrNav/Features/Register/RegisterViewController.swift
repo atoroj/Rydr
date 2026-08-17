@@ -798,7 +798,17 @@ final class RegisterViewController: UIViewController {
         guard let ride = currentRide else { return }
         do {
             _ = try await rideRepository.finishRide(rideId: ride.id)
+            // Instantánea de lo que hay en memoria — completo siempre,
+            // pase lo que pase con la sincronización de la cola local
+            // (ver `PublishSource.freshlyRecorded` en
+            // `PublishRouteViewController`) — a diferencia de
+            // `ride.track_points` en el backend, que en este mismo
+            // instante todavía podría no tener los últimos puntos si no
+            // ha habido cobertura hasta ahora mismo.
             let pointCount = trackCoordinates.count
+            let publishCoordinates = trackCoordinates
+            let distanceKm = (totalDistanceMeters / 1000 * 100).rounded() / 100
+            let durationMinutes = max(1, Int(Date().timeIntervalSince(rideStartDate ?? Date()) / 60))
             currentRide = nil
             UserDefaults.standard.removeObject(forKey: Self.pendingRideIdKey)
             stopTimer()
@@ -830,7 +840,10 @@ final class RegisterViewController: UIViewController {
                 // publicar con éxito; aquí no hace falta ningún efecto
                 // extra — el usuario se queda en el mapa y cierra con la X
                 // cuando quiera.
-                let publish = PublishRouteViewController(rideId: ride.id, pointCount: pointCount) {}
+                let publish = PublishRouteViewController(
+                    source: .freshlyRecorded(
+                        coordinates: publishCoordinates, distanceKm: distanceKm, durationMinutes: durationMinutes),
+                    pointCount: pointCount, onPublished: {})
                 present(UINavigationController(rootViewController: publish), animated: true)
             }
         } catch {

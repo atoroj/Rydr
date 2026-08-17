@@ -55,7 +55,7 @@ final class RidesHistoryViewController: UIViewController {
 
     private func publishFlow(for ride: RideModel) {
         let publish = PublishRouteViewController(
-            rideId: ride.id, pointCount: ride.trackPoints.count
+            source: .existingRide(rideId: ride.id), pointCount: ride.trackPoints.count
         ) { [weak self] in
             self?.reload()
         }

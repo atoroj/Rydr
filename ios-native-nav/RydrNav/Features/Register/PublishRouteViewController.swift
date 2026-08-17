@@ -1,5 +1,23 @@
+import CoreLocation
 import PhotosUI
 import UIKit
+
+/// De dónde saca esta pantalla los datos de la ruta a publicar.
+enum PublishSource {
+    /// Justo después de terminar de grabar, en la misma sesión — el
+    /// trazado/distancia/duración ya están completos en el propio móvil
+    /// (`RegisterViewController.trackCoordinates` nunca depende de si la
+    /// cola de `RideTrackSyncManager` ha terminado de llegar al backend
+    /// todavía) y se mandan tal cual, sin pasar por `ride.track_points`
+    /// del servidor — así publicar nunca sale incompleto por una
+    /// sincronización aún en curso.
+    case freshlyRecorded(coordinates: [CLLocationCoordinate2D], distanceKm: Double, durationMinutes: Int)
+    /// Publicar un ride de una sesión anterior (desde "Mis rides") — aquí
+    /// no hay nada en memoria de aquella grabación, así que sí hace falta
+    /// que el backend derive el trazado de `ride.track_points` (ya
+    /// sincronizados de sobra a estas alturas).
+    case existingRide(rideId: Int)
+}
 
 /// Formulario para publicar un ride finalizado como ruta pública — sustituye
 /// al `UIAlertController` con text fields que usaban antes
@@ -7,7 +25,7 @@ import UIKit
 /// puede alojar un selector de foto). Espejo de `_PublishRideDialog`
 /// (lib/features/register/presentation/register_screen.dart).
 final class PublishRouteViewController: UIViewController {
-    private let rideId: Int
+    private let source: PublishSource
     private let pointCount: Int
     private let onPublished: () -> Void
 
@@ -17,8 +35,8 @@ final class PublishRouteViewController: UIViewController {
     private let statusLabel = UILabel()
     private var selectedImage: UIImage?
 
-    init(rideId: Int, pointCount: Int, onPublished: @escaping () -> Void) {
-        self.rideId = rideId
+    init(source: PublishSource, pointCount: Int, onPublished: @escaping () -> Void) {
+        self.source = source
         self.pointCount = pointCount
         self.onPublished = onPublished
         super.init(nibName: nil, bundle: nil)
@@ -115,10 +133,24 @@ final class PublishRouteViewController: UIViewController {
                     coverImageUrl = try await UploadsRepository().uploadImage(selectedImage)
                 }
                 let description = descriptionField.text?.trimmingCharacters(in: .whitespaces)
-                _ = try await RouteRepository().createRoute(
-                    fromRide: rideId, name: name,
-                    description: description?.isEmpty == true ? nil : description,
-                    coverImageUrl: coverImageUrl)
+                let cleanDescription = description?.isEmpty == true ? nil : description
+
+                switch source {
+                case .freshlyRecorded(let coordinates, let distanceKm, let durationMinutes):
+                    guard let authorId = AuthManager.shared.currentUser?.id else {
+                        throw APIError(message: "Sesión no válida — vuelve a iniciar sesión.")
+                    }
+                    let geojson: [String: Any] = [
+                        "type": "LineString",
+                        "coordinates": coordinates.map { [$0.longitude, $0.latitude] },
+                    ]
+                    _ = try await RouteRepository().createRoute(
+                        name: name, description: cleanDescription, authorId: authorId, geojson: geojson,
+                        distanceKm: distanceKm, durationMinutes: durationMinutes, coverImageUrl: coverImageUrl)
+                case .existingRide(let rideId):
+                    _ = try await RouteRepository().createRoute(
+                        fromRide: rideId, name: name, description: cleanDescription, coverImageUrl: coverImageUrl)
+                }
                 onPublished()
                 dismiss(animated: true)
             } catch {
