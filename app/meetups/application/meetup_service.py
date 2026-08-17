@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
-from app.meetups.domain.meetup import Meetup
+from app.meetups.domain.meetup import Meetup, LiveLocation
 from app.meetups.domain.meetup_repository import MeetupRepository
 from app.riders.domain.follow_repository import FollowRepository
 from app.riders.domain.follow import FollowStatus
@@ -19,11 +19,22 @@ class MeetupView:
     is_organizer: bool
 
 
+@dataclass
+class LiveLocationView:
+    user: User
+    location: LiveLocation
+
+
 class MeetupService:
     """Quedadas: organizar rutas en grupo. Privada = solo visible/apuntable
     para quien sigue al organizador (mismo modelo de "amigos" que Riders);
     pública = cualquiera puede verla y apuntarse. Coordina Meetups con
     Users (datos del organizador) y Riders (visibilidad "para amigos")."""
+
+    # Un participante que deja de mandar ubicación (cierra la app, apaga el
+    # GPS, termina la ruta) desaparece solo del mapa pasado este tiempo —
+    # sin necesitar una acción explícita de "dejar de compartir".
+    LIVE_LOCATION_WINDOW = timedelta(minutes=3)
 
     def __init__(self, meetup_repo: MeetupRepository, user_repo: UserRepository, follow_repo: FollowRepository):
         self.meetup_repo = meetup_repo
@@ -71,6 +82,24 @@ class MeetupService:
 
     def get_participants(self, meetup_id: int) -> List[User]:
         return [u for u in (self.user_repo.get_by_id(uid) for uid in self.meetup_repo.list_participant_ids(meetup_id)) if u]
+
+    def update_location(self, meetup_id: int, user_id: int, lat: float, lng: float) -> None:
+        if not self.meetup_repo.is_participant(meetup_id, user_id):
+            raise PermissionError("Solo los apuntados a la quedada pueden compartir su ubicación")
+        self.meetup_repo.update_location(meetup_id, user_id, lat, lng, datetime.now())
+
+    def list_live_locations(self, meetup_id: int, viewer_id: int) -> List[LiveLocationView]:
+        meetup = self._get_or_raise(meetup_id)
+        if not self._can_view(meetup, viewer_id):
+            raise PermissionError("Esta quedada es privada")
+        since = datetime.now() - self.LIVE_LOCATION_WINDOW
+        locations = self.meetup_repo.list_live_locations(meetup_id, since)
+        views = []
+        for loc in locations:
+            user = self.user_repo.get_by_id(loc.user_id)
+            if user:
+                views.append(LiveLocationView(user=user, location=loc))
+        return views
 
     def get_view(self, meetup_id: int, viewer_id: int) -> MeetupView:
         meetup = self._get_or_raise(meetup_id)

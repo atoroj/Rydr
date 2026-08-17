@@ -5,9 +5,11 @@ from sqlalchemy.orm import Session
 
 from app.meetups.application.meetup_dto import (
     CreateMeetupRequest,
+    LiveLocationResponse,
     MeetupOrganizerResponse,
     MeetupResponse,
     ParticipantResponse,
+    UpdateLocationRequest,
     UpdateMeetupRequest,
 )
 from app.meetups.application.meetup_service import MeetupService, MeetupView
@@ -155,4 +157,38 @@ def list_participants(
     return [
         ParticipantResponse(id=u.id, username=u.username, avatar_url=u.avatar_url)
         for u in service.get_participants(meetup_id)
+    ]
+
+
+@router.post("/{meetup_id}/location", status_code=status.HTTP_204_NO_CONTENT)
+def update_location(
+    meetup_id: int,
+    request: UpdateLocationRequest,
+    service: MeetupService = Depends(get_service),
+    current_user: UserModel = Depends(get_current_user),
+):
+    try:
+        service.update_location(meetup_id, current_user.id, request.lat, request.lng)
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+
+@router.get("/{meetup_id}/live-locations", response_model=List[LiveLocationResponse])
+def list_live_locations(
+    meetup_id: int,
+    service: MeetupService = Depends(get_service),
+    current_user: UserModel = Depends(get_current_user),
+):
+    try:
+        views = service.list_live_locations(meetup_id, current_user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    return [
+        LiveLocationResponse(
+            user_id=v.user.id, username=v.user.username, avatar_url=v.user.avatar_url,
+            lat=v.location.lat, lng=v.location.lng, updated_at=v.location.updated_at,
+        )
+        for v in views
     ]

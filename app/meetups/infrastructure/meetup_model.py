@@ -26,6 +26,11 @@ class MeetupParticipantModel(Base):
     meetup_id = Column(Integer, ForeignKey("meetups.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     joined_at = Column(DateTime, nullable=False)
+    # Ubicación en vivo — solo el último punto compartido, sin historial.
+    # Nullable: la mayoría de participantes nunca la usan.
+    last_lat = Column(Float, nullable=True)
+    last_lng = Column(Float, nullable=True)
+    last_location_at = Column(DateTime, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("meetup_id", "user_id", name="uq_meetup_participant"),

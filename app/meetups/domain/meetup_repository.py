@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import List, Optional
 
-from app.meetups.domain.meetup import Meetup
+from app.meetups.domain.meetup import Meetup, LiveLocation
 
 
 class MeetupRepository(ABC):
@@ -57,4 +58,19 @@ class MeetupRepository(ABC):
 
     @abstractmethod
     def list_participant_ids(self, meetup_id: int) -> List[int]:
+        pass
+
+    # ── Ubicación en vivo ────────────────────────────────────────────────
+
+    @abstractmethod
+    def update_location(self, meetup_id: int, user_id: int, lat: float, lng: float, at: datetime) -> None:
+        """No-op si `user_id` no está apuntado a la quedada — lo decide el
+        servicio antes de llamar aquí."""
+        pass
+
+    @abstractmethod
+    def list_live_locations(self, meetup_id: int, since: datetime) -> List[LiveLocation]:
+        """Solo participantes con `last_location_at >= since` — así quien
+        deja de compartir desaparece solo, sin un "dejar de compartir"
+        explícito."""
         pass

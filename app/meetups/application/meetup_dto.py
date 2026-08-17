@@ -57,3 +57,17 @@ class ParticipantResponse(BaseModel):
     avatar_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UpdateLocationRequest(BaseModel):
+    lat: float
+    lng: float
+
+
+class LiveLocationResponse(BaseModel):
+    user_id: int
+    username: str
+    avatar_url: Optional[str] = None
+    lat: float
+    lng: float
+    updated_at: datetime

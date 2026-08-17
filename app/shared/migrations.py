@@ -26,3 +26,6 @@ def run_light_migrations(engine: Engine) -> None:
     _add_column_if_missing(engine, "motorbike", "is_current", "is_current BOOLEAN DEFAULT 0")
     _add_column_if_missing(engine, "motorbike", "year", "year INTEGER")
     _add_column_if_missing(engine, "routes", "cover_image_url", "cover_image_url VARCHAR")
+    _add_column_if_missing(engine, "meetup_participants", "last_lat", "last_lat FLOAT")
+    _add_column_if_missing(engine, "meetup_participants", "last_lng", "last_lng FLOAT")
+    _add_column_if_missing(engine, "meetup_participants", "last_location_at", "last_location_at DATETIME")

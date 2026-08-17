@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.meetups.domain.meetup import Meetup
+from app.meetups.domain.meetup import Meetup, LiveLocation
 from app.meetups.domain.meetup_repository import MeetupRepository
 from app.meetups.infrastructure.meetup_model import MeetupModel, MeetupParticipantModel
 
@@ -107,3 +107,27 @@ class SqlAlchemyMeetupRepository(MeetupRepository):
     def list_participant_ids(self, meetup_id: int) -> List[int]:
         rows = self.db.query(MeetupParticipantModel).filter(MeetupParticipantModel.meetup_id == meetup_id).all()
         return [r.user_id for r in rows]
+
+    # ── Ubicación en vivo ────────────────────────────────────────────────
+
+    def update_location(self, meetup_id: int, user_id: int, lat: float, lng: float, at: datetime) -> None:
+        p = self.db.query(MeetupParticipantModel).filter(
+            MeetupParticipantModel.meetup_id == meetup_id, MeetupParticipantModel.user_id == user_id
+        ).first()
+        if p is None:
+            return
+        p.last_lat = lat
+        p.last_lng = lng
+        p.last_location_at = at
+        self.db.commit()
+
+    def list_live_locations(self, meetup_id: int, since: datetime) -> List[LiveLocation]:
+        rows = self.db.query(MeetupParticipantModel).filter(
+            MeetupParticipantModel.meetup_id == meetup_id,
+            MeetupParticipantModel.last_location_at.isnot(None),
+            MeetupParticipantModel.last_location_at >= since,
+        ).all()
+        return [
+            LiveLocation(user_id=r.user_id, lat=r.last_lat, lng=r.last_lng, updated_at=r.last_location_at)
+            for r in rows
+        ]
