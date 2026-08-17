@@ -18,6 +18,7 @@ final class RegisterViewController: UIViewController {
     private var trackCoordinates: [CLLocationCoordinate2D] = []
     private var polylineManager: PolylineAnnotationManager?
     private var lastCameraUpdate: Date?
+    private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
     private var rideStartDate: Date?
     private var recordingTimer: Timer?
 
@@ -566,6 +567,24 @@ final class RegisterViewController: UIViewController {
         }
     }
 
+    /// Espera la respuesta real del diálogo del sistema en vez de mirar
+    /// `authorizationStatus` justo después de pedirlo (que en ese instante
+    /// todavía tendría el valor de antes — la respuesta llega por
+    /// delegado, de forma asíncrona). Solo espera de verdad cuando pedirlo
+    /// puede realmente mostrar un diálogo nuevo (`.notDetermined`, o
+    /// `.authorizedWhenInUse` — desde ahí iOS sí ofrece "ampliar a
+    /// Siempre"); en cualquier otro estado ya decidido, `request*` no
+    /// dispara ningún delegado nuevo y esperar se quedaría colgado para
+    /// siempre.
+    private func requestAlwaysAuthorization() async -> CLAuthorizationStatus {
+        let current = locationManager.authorizationStatus
+        guard current == .notDetermined || current == .authorizedWhenInUse else { return current }
+        return await withCheckedContinuation { continuation in
+            authorizationContinuation = continuation
+            locationManager.requestAlwaysAuthorization()
+        }
+    }
+
     // MARK: - Grabar ruta
 
     @objc private func onStartTapped() {
@@ -587,14 +606,25 @@ final class RegisterViewController: UIViewController {
         guard let bike else { return }
         selectedBike = bike
 
-        do {
-            // Pide "siempre" antes de arrancar: sin este permiso el sistema
-            // mata las actualizaciones de posición en cuanto la app pasa a
-            // segundo plano y la grabación se corta a medias.
-            locationManager.requestAlwaysAuthorization()
-            locationManager.allowsBackgroundLocationUpdates = true
-            locationManager.pausesLocationUpdatesAutomatically = false
+        // Pide "siempre" antes de arrancar y ESPERA la respuesta real del
+        // diálogo (antes se pedía y se seguía sin más — si el sistema mata
+        // las actualizaciones de posición en cuanto la app pasa a segundo
+        // plano, la grabación se corta a medias sin que nadie se entere
+        // hasta volver y ver el trazado incompleto). Si sigue sin ser
+        // "Siempre" tras preguntarle, se avisa antes de empezar, no
+        // después de descubrirlo a medias.
+        let authorization = await requestAlwaysAuthorization()
+        guard authorization == .authorizedAlways else {
+            showAlert(
+                title: "Falta un permiso",
+                message: "Grabar en segundo plano necesita el permiso de ubicación \"Siempre\" — actívalo en "
+                    + "Ajustes del sistema antes de empezar. Si no, la grabación puede cortarse al bloquear el móvil.")
+            return
+        }
+        locationManager.allowsBackgroundLocationUpdates = true
+        locationManager.pausesLocationUpdatesAutomatically = false
 
+        do {
             let ride = try await rideRepository.startRide(riderId: userId, motorbikeId: bike.id)
             currentRide = ride
             trackCoordinates = []
@@ -738,5 +768,10 @@ extension RegisterViewController: CLLocationManagerDelegate {
                 altitude: location.altitude, speed: location.speed >= 0 ? location.speed * 3.6 : nil,
                 timestamp: location.timestamp)
         }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        authorizationContinuation?.resume(returning: manager.authorizationStatus)
+        authorizationContinuation = nil
     }
 }
