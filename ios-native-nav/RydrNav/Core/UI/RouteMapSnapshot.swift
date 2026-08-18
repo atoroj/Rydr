@@ -11,19 +11,34 @@ enum RouteMapSnapshot {
     // sobra para que el trazado se reconozca en una miniatura.
     private static let maxOverlayPoints = 100
 
-    static func url(for coordinates: [CLLocationCoordinate2D], width: Int = 600, height: Int = 300) -> URL? {
-        guard coordinates.count >= 2, let token = MapboxConfig.accessToken else { return nil }
+    /// `segments`: cada tramo del trazado por separado (ver
+    /// `RouteModel.segments`) — un tramo sin pausas es un único elemento,
+    /// cero cambio respecto a antes. Con más de uno, se manda un overlay
+    /// `path-...(...)` por tramo (la Static Images API admite varios,
+    /// separados por coma, en la misma URL) para no dibujar una línea recta
+    /// uniendo el hueco de una pausa.
+    static func url(for segments: [[CLLocationCoordinate2D]], width: Int = 600, height: Int = 300) -> URL? {
+        let realSegments = segments.filter { $0.count >= 2 }
+        guard !realSegments.isEmpty, let token = MapboxConfig.accessToken else { return nil }
 
-        let sampled = downsample(coordinates, maxPoints: maxOverlayPoints)
-        let polyline = PolylineEncoder.encode(sampled)
-        guard let encodedPolyline = polyline.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else {
-            return nil
+        let totalPoints = realSegments.reduce(0) { $0 + $1.count }
+        let overlays = realSegments.compactMap { segment -> String? in
+            // Presupuesto de puntos repartido a prorrata del tamaño de
+            // cada tramo, con un mínimo de 2 (los extremos) para que un
+            // tramo corto no se quede sin overlay por redondeo.
+            let share = max(2, Int((Double(segment.count) / Double(totalPoints)) * Double(maxOverlayPoints)))
+            let sampled = downsample(segment, maxPoints: share)
+            let polyline = PolylineEncoder.encode(sampled)
+            guard let encodedPolyline = polyline.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else {
+                return nil
+            }
+            // Naranja de marca Hi-Vis (AppTheme.primary, #FFB020) sin '#',
+            // tal como lo pide el overlay `path-{width}+{color}-{opacity}(...)`.
+            return "path-4+ffb020-1(\(encodedPolyline))"
         }
+        guard !overlays.isEmpty else { return nil }
 
-        // Naranja de marca Hi-Vis (AppTheme.primary, #FFB020) sin '#', tal
-        // como lo pide el overlay `path-{width}+{color}-{opacity}(...)`.
-        let overlay = "path-4+ffb020-1(\(encodedPolyline))"
-        let urlString = "https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/\(overlay)"
+        let urlString = "https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/\(overlays.joined(separator: ","))"
             + "/auto/\(width)x\(height)@2x?padding=30&access_token=\(token)"
         return URL(string: urlString)
     }

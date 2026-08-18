@@ -29,6 +29,7 @@ class RideService:
         altitude: Optional[float],
         speed: Optional[float],
         timestamp: datetime,
+        is_segment_start: bool = False,
     ) -> TrackPoint:
         track_point = TrackPoint(
             id=None,
@@ -38,6 +39,7 @@ class RideService:
             altitude=altitude,
             speed=speed,
             timestamp=timestamp,
+            is_segment_start=is_segment_start,
         )
         return self.repository.add_track_point(track_point)
 
@@ -55,6 +57,7 @@ class RideService:
                 altitude=point.altitude,
                 speed=point.speed,
                 timestamp=point.timestamp,
+                is_segment_start=point.is_segment_start,
             )
         return len(points)
 

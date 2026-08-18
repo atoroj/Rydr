@@ -13,6 +13,10 @@ struct PendingTrackPoint: Codable {
     let altitude: Double?
     let speed: Double?
     let timestamp: Date
+    /// Primer punto de un tramo nuevo tras una pausa — ver
+    /// `RegisterViewController.trackSegments`. Se manda al backend para
+    /// que el trazado publicado no conecte el hueco con una línea recta.
+    let isSegmentStart: Bool
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -159,6 +163,7 @@ final class RideTrackSyncManager {
         var body: [String: Any] = [
             "latitude": point.latitude, "longitude": point.longitude,
             "timestamp": requestTimestampFormatter.string(from: point.timestamp),
+            "is_segment_start": point.isSegmentStart,
         ]
         if let altitude = point.altitude { body["altitude"] = altitude }
         if let speed = point.speed { body["speed"] = speed }

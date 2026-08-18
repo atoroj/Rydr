@@ -186,11 +186,16 @@ final class RouteDetailViewController: UIViewController {
         let coordinates = route.path
         guard coordinates.count >= 2 else { return }
 
+        // Un `PolylineAnnotation` por tramo (ver `RouteModel.segments`) en
+        // vez de uno solo con todos los puntos seguidos — así el hueco de
+        // una pausa no sale dibujado como si fuera carretera recorrida.
         let manager = mapView.annotations.makePolylineAnnotationManager()
-        var polyline = PolylineAnnotation(lineCoordinates: coordinates)
-        polyline.lineColor = StyleColor(AppTheme.primary)
-        polyline.lineWidth = 4
-        manager.annotations = [polyline]
+        manager.annotations = route.segments.filter { $0.count >= 2 }.map { segment in
+            var polyline = PolylineAnnotation(lineCoordinates: segment)
+            polyline.lineColor = StyleColor(AppTheme.primary)
+            polyline.lineWidth = 4
+            return polyline
+        }
 
         // `camera(for:padding:bearing:pitch:)` está obsoleto — la versión
         // nueva pide una `CameraOptions` base (vacía = usa lo que ya
@@ -340,11 +345,18 @@ final class RouteDetailViewController: UIViewController {
     @objc private func onExportTapped() {
         var gpx = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
         gpx += "<gpx version=\"1.1\" creator=\"RydrNav\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n"
-        gpx += "  <trk><name>\(route.name)</name><trkseg>\n"
-        for point in route.path {
-            gpx += "    <trkpt lat=\"\(point.latitude)\" lon=\"\(point.longitude)\"></trkpt>\n"
+        gpx += "  <trk><name>\(route.name)</name>\n"
+        // Un `<trkseg>` por tramo — GPX soporta esto de forma nativa,
+        // literalmente para este caso (varios segmentos dentro de la
+        // misma pista, con un hueco entre medias que no se recorrió).
+        for segment in route.segments {
+            gpx += "  <trkseg>\n"
+            for point in segment {
+                gpx += "    <trkpt lat=\"\(point.latitude)\" lon=\"\(point.longitude)\"></trkpt>\n"
+            }
+            gpx += "  </trkseg>\n"
         }
-        gpx += "  </trkseg></trk>\n</gpx>"
+        gpx += "  </trk>\n</gpx>"
 
         let fileName = route.name.replacingOccurrences(of: " ", with: "_") + ".gpx"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)

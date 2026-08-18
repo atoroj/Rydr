@@ -4,7 +4,7 @@ from typing import Optional, List
 from app.rides.domain.ride import Ride
 from app.routes.domain.route import Route
 from app.routes.domain.route_repository import RouteRepository
-from app.shared.geo import total_distance_km
+from app.shared.geo import split_into_segments, total_distance_km_by_segments
 
 
 class RouteService:
@@ -17,16 +17,47 @@ class RouteService:
         if not ride.track_points:
             raise ValueError("El ride no tiene track points registrados")
 
-        coordinates = [[tp.longitude, tp.latitude] for tp in ride.track_points]
-        geojson = {"type": "LineString", "coordinates": coordinates}
+        # Trocea por tramos (un corte cada vez que un punto marca
+        # `is_segment_start` — el primero tras un "Reanudar") para que ni
+        # el geojson ni las cifras conecten el hueco de una pausa: ni como
+        # línea recta (carretera falsa) ni como distancia/tiempo
+        # recorridos de verdad.
+        points_with_flags = [
+            (tp.latitude, tp.longitude, tp.is_segment_start) for tp in ride.track_points
+        ]
+        segments = split_into_segments(points_with_flags)
+        if len(segments) <= 1:
+            geojson = {
+                "type": "LineString",
+                "coordinates": [[lon, lat] for lat, lon in segments[0]] if segments else [],
+            }
+        else:
+            geojson = {
+                "type": "MultiLineString",
+                "coordinates": [[[lon, lat] for lat, lon in segment] for segment in segments],
+            }
 
-        points = [(tp.latitude, tp.longitude) for tp in ride.track_points]
-        distance_km = round(total_distance_km(points), 2)
+        distance_km = round(total_distance_km_by_segments(points_with_flags), 2)
 
-        # Calcula duración desde el primer al último track point (más preciso que started_at/finished_at)
-        if len(ride.track_points) >= 2:
-            delta = ride.track_points[-1].timestamp - ride.track_points[0].timestamp
-            duration_minutes = max(1, int(delta.total_seconds() / 60))
+        # Duración: suma (último − primer timestamp) DENTRO de cada tramo,
+        # así el rato parado entre tramos queda excluido por construcción
+        # — no hace falta guardar marcas de pausa/reanudación aparte.
+        segment_boundaries: list[tuple[int, int]] = []
+        start_index = 0
+        for index, tp in enumerate(ride.track_points):
+            if index > 0 and tp.is_segment_start:
+                segment_boundaries.append((start_index, index - 1))
+                start_index = index
+        if ride.track_points:
+            segment_boundaries.append((start_index, len(ride.track_points) - 1))
+
+        total_seconds = sum(
+            (ride.track_points[end].timestamp - ride.track_points[start].timestamp).total_seconds()
+            for start, end in segment_boundaries
+            if end > start
+        )
+        if total_seconds > 0:
+            duration_minutes = max(1, int(total_seconds / 60))
         else:
             duration_minutes = max(1, int((ride.finished_at - ride.started_at).total_seconds() / 60))
 

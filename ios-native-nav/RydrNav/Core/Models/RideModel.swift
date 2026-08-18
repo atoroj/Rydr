@@ -10,14 +10,32 @@ struct TrackPointModel: Codable, Equatable {
     let altitude: Double?
     let speed: Double?
     let timestamp: Date
+    /// Primer punto de un tramo nuevo tras una pausa — ver
+    /// `RegisterViewController.trackSegments`.
+    let isSegmentStart: Bool
 
     enum CodingKeys: String, CodingKey {
         case id, latitude, longitude, altitude, speed, timestamp
         case rideId = "ride_id"
+        case isSegmentStart = "is_segment_start"
     }
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        rideId = try c.decode(Int.self, forKey: .rideId)
+        latitude = try c.decode(Double.self, forKey: .latitude)
+        longitude = try c.decode(Double.self, forKey: .longitude)
+        altitude = try c.decodeIfPresent(Double.self, forKey: .altitude)
+        speed = try c.decodeIfPresent(Double.self, forKey: .speed)
+        timestamp = try c.decode(Date.self, forKey: .timestamp)
+        // `decodeIfPresent ... ?? false`: rides grabados antes de este
+        // campo no lo tienen, y no deben romper la decodificación.
+        isSegmentStart = try c.decodeIfPresent(Bool.self, forKey: .isSegmentStart) ?? false
     }
 }
 

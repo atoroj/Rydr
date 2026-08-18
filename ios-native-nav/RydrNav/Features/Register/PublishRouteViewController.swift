@@ -6,12 +6,14 @@ import UIKit
 enum PublishSource {
     /// Justo después de terminar de grabar, en la misma sesión — el
     /// trazado/distancia/duración ya están completos en el propio móvil
-    /// (`RegisterViewController.trackCoordinates` nunca depende de si la
+    /// (`RegisterViewController.trackSegments` nunca depende de si la
     /// cola de `RideTrackSyncManager` ha terminado de llegar al backend
     /// todavía) y se mandan tal cual, sin pasar por `ride.track_points`
     /// del servidor — así publicar nunca sale incompleto por una
-    /// sincronización aún en curso.
-    case freshlyRecorded(coordinates: [CLLocationCoordinate2D], distanceKm: Double, durationMinutes: Int)
+    /// sincronización aún en curso. `segments`: cada tramo grabado por
+    /// separado (un tramo nuevo por cada pausa) — para no conectar el
+    /// hueco de una pausa con una línea recta al construir el geojson.
+    case freshlyRecorded(segments: [[CLLocationCoordinate2D]], distanceKm: Double, durationMinutes: Int)
     /// Publicar un ride de una sesión anterior (desde "Mis rides") — aquí
     /// no hay nada en memoria de aquella grabación, así que sí hace falta
     /// que el backend derive el trazado de `ride.track_points` (ya
@@ -136,14 +138,30 @@ final class PublishRouteViewController: UIViewController {
                 let cleanDescription = description?.isEmpty == true ? nil : description
 
                 switch source {
-                case .freshlyRecorded(let coordinates, let distanceKm, let durationMinutes):
+                case .freshlyRecorded(let segments, let distanceKm, let durationMinutes):
                     guard let authorId = AuthManager.shared.currentUser?.id else {
                         throw APIError(message: "Sesión no válida — vuelve a iniciar sesión.")
                     }
-                    let geojson: [String: Any] = [
-                        "type": "LineString",
-                        "coordinates": coordinates.map { [$0.longitude, $0.latitude] },
-                    ]
+                    // Un tramo con 1 solo punto (p. ej. se pausó justo tras
+                    // reanudar, sin llegar a moverse) no es una `LineString`
+                    // válida en GeoJSON — se descarta. Mismo criterio que
+                    // usa el backend en `create_route_from_ride`, para que
+                    // publicar justo al terminar o más tarde desde "Mis
+                    // rides" produzcan el mismo tipo de geojson ante la
+                    // misma situación.
+                    let validSegments = segments.filter { $0.count >= 2 }
+                    let geojson: [String: Any]
+                    if validSegments.count <= 1 {
+                        geojson = [
+                            "type": "LineString",
+                            "coordinates": (validSegments.first ?? []).map { [$0.longitude, $0.latitude] },
+                        ]
+                    } else {
+                        geojson = [
+                            "type": "MultiLineString",
+                            "coordinates": validSegments.map { segment in segment.map { [$0.longitude, $0.latitude] } },
+                        ]
+                    }
                     _ = try await RouteRepository().createRoute(
                         name: name, description: cleanDescription, authorId: authorId, geojson: geojson,
                         distanceKm: distanceKm, durationMinutes: durationMinutes, coverImageUrl: coverImageUrl)

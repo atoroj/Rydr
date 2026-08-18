@@ -48,6 +48,7 @@ def add_track_point(
         altitude=request.altitude,
         speed=request.speed,
         timestamp=request.timestamp,
+        is_segment_start=request.is_segment_start,
     )
 
 

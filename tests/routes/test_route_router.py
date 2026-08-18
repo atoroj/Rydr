@@ -70,6 +70,43 @@ def test_create_route_from_finished_ride(client):
     assert data["distance_km"] > 0
 
 
+def test_create_route_from_ride_with_pause_splits_into_multilinestring(client):
+    # Dos tramos separados por una pausa: tramo 1 cerca de Madrid, salto
+    # grande (varios cientos de km, simulando "me fui en coche mientras
+    # estaba pausado") y tramo 2 cerca de Barcelona — si el hueco se
+    # contara como distancia real, saldría un `distance_km` disparatado.
+    rider_id, motorbike_id = create_user_and_motorbike(client)
+    ride_id = client.post("/rides/", json={"rider_id": rider_id, "motorbike_id": motorbike_id}).json()["id"]
+
+    segment_1 = [(40.4168, -3.7038), (40.4200, -3.7100)]
+    segment_2 = [(41.3874, 2.1686), (41.3900, 2.1700)]
+    for lat, lon in segment_1:
+        client.post(f"/rides/{ride_id}/track-points", json={
+            "latitude": lat, "longitude": lon, "timestamp": "2025-06-01T10:00:00",
+        })
+    for i, (lat, lon) in enumerate(segment_2):
+        client.post(f"/rides/{ride_id}/track-points", json={
+            "latitude": lat, "longitude": lon, "timestamp": "2025-06-01T12:00:00",
+            "is_segment_start": i == 0,
+        })
+    client.patch(f"/rides/{ride_id}/finish")
+
+    response = client.post("/routes/from-ride", json={"ride_id": ride_id, "name": "Ruta con pausa"})
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["geojson"]["type"] == "MultiLineString"
+    assert len(data["geojson"]["coordinates"]) == 2
+    assert len(data["geojson"]["coordinates"][0]) == 2
+    assert len(data["geojson"]["coordinates"][1]) == 2
+    # Madrid-Barcelona en línea recta son ~500km — si el salto se hubiera
+    # contado, distance_km sería enorme. Cada tramo real mide unos metros.
+    assert data["distance_km"] < 5
+    # La "duración" real dentro de cada tramo es ~0min (mismo timestamp);
+    # el salto de 2h entre tramos no debe colarse en duration_minutes.
+    assert data["duration_minutes"] <= 1
+
+
 def test_create_route_from_unfinished_ride_returns_400(client):
     rider_id, motorbike_id = create_user_and_motorbike(client)
     ride_id = client.post("/rides/", json={"rider_id": rider_id, "motorbike_id": motorbike_id}).json()["id"]

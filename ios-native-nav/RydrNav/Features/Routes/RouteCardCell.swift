@@ -95,7 +95,7 @@ final class RouteCardCell: UICollectionViewCell {
         // portada subida al publicar (esa se enseña en el detalle de la
         // ruta). Si por lo que sea no se puede generar (sin puntos, sin
         // token...) cae a la foto subida y, si tampoco hay, al placeholder.
-        let snapshotURL = RouteMapSnapshot.url(for: route.path)
+        let snapshotURL = RouteMapSnapshot.url(for: route.segments)
         coverImage.load(urlString: snapshotURL?.absoluteString ?? route.coverImageUrl, placeholder: UIImage(systemName: "map"))
     }
 

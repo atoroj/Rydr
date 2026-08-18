@@ -17,3 +17,23 @@ def total_distance_km(points: list[tuple[float, float]]) -> float:
         haversine_km(points[i][0], points[i][1], points[i + 1][0], points[i + 1][1])
         for i in range(len(points) - 1)
     )
+
+
+def split_into_segments(points_with_flags: list[tuple[float, float, bool]]) -> list[list[tuple[float, float]]]:
+    """Trocea una lista de (lat, lon, is_segment_start) en sub-listas de
+    (lat, lon) — un corte nuevo cada vez que `is_segment_start` es True,
+    salvo en el primer punto (que no cuenta como corte: ya es el arranque
+    del primer tramo). Usado para no conectar con una línea recta —ni
+    contar como distancia recorrida— el hueco que deja una pausa."""
+    segments: list[list[tuple[float, float]]] = []
+    for index, (lat, lon, is_segment_start) in enumerate(points_with_flags):
+        if index == 0 or is_segment_start:
+            segments.append([])
+        segments[-1].append((lat, lon))
+    return segments
+
+
+def total_distance_km_by_segments(points_with_flags: list[tuple[float, float, bool]]) -> float:
+    """Igual que `total_distance_km`, pero sin sumar el salto entre el
+    último punto de un tramo y el primero del siguiente."""
+    return sum(total_distance_km(segment) for segment in split_into_segments(points_with_flags))

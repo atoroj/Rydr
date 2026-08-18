@@ -37,7 +37,13 @@ struct RouteSummary: Codable, Equatable, Identifiable {
     }
 
     var path: [CLLocationCoordinate2D] {
-        geojson.coordinates.map { CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0]) }
+        geojson.segments.flatMap { $0.map { CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0]) } }
+    }
+
+    /// Ver `RouteModel.segments` — cada tramo por separado, para no dibujar
+    /// el hueco de una pausa como si fuera carretera recorrida.
+    var segments: [[CLLocationCoordinate2D]] {
+        geojson.segments.map { $0.map { CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0]) } }
     }
 }
 

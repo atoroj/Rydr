@@ -92,6 +92,22 @@ def test_add_track_points_batch_empty(client):
     assert response.json() == {"created": 0}
 
 
+def test_add_track_point_with_segment_start(client):
+    rider_id, motorbike_id = create_user_and_motorbike(client)
+    ride_id = client.post("/rides/", json={"rider_id": rider_id, "motorbike_id": motorbike_id}).json()["id"]
+
+    response = client.post(f"/rides/{ride_id}/track-points", json={
+        "latitude": 40.4168, "longitude": -3.7038, "timestamp": "2025-06-01T10:00:00",
+        "is_segment_start": True,
+    })
+
+    assert response.status_code == 201
+    assert response.json()["is_segment_start"] is True
+
+    ride = client.get(f"/rides/{ride_id}").json()
+    assert ride["track_points"][0]["is_segment_start"] is True
+
+
 def test_get_ride_includes_track_points(client):
     rider_id, motorbike_id = create_user_and_motorbike(client)
     ride_id = client.post("/rides/", json={"rider_id": rider_id, "motorbike_id": motorbike_id}).json()["id"]

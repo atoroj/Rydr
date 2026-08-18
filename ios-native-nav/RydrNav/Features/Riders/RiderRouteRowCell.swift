@@ -81,7 +81,7 @@ final class RiderRouteRowCell: UICollectionViewCell {
         metaLabel.styleAsLabel(
             "\(km) km · \(Self.dateFormatter.string(from: route.createdAt))",
             size: 11.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.6)
-        let snapshotURL = RouteMapSnapshot.url(for: route.path, width: 160, height: 110)
+        let snapshotURL = RouteMapSnapshot.url(for: route.segments, width: 160, height: 110)
         mapImage.load(urlString: snapshotURL?.absoluteString ?? route.coverImageUrl, placeholder: UIImage(systemName: "map"))
     }
 }

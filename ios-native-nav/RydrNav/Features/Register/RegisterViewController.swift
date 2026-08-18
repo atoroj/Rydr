@@ -15,7 +15,12 @@ final class RegisterViewController: UIViewController {
     private let motorbikeRepository = MotorbikeRepository()
 
     private var currentRide: RideModel?
-    private var trackCoordinates: [CLLocationCoordinate2D] = []
+    // Cada tramo por separado (un tramo nuevo se abre al pulsar
+    // "Reanudar" tras una pausa) — así ni el trazado en vivo ni las
+    // cifras conectan el hueco de la pausa como si fuera carretera
+    // recorrida. Sin pausas, sigue habiendo un único tramo con todos los
+    // puntos, igual que siempre.
+    private var trackSegments: [[CLLocationCoordinate2D]] = [[]]
     private var polylineManager: PolylineAnnotationManager?
     private var lastCameraUpdate: Date?
     private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
@@ -33,6 +38,14 @@ final class RegisterViewController: UIViewController {
     private var totalDistanceMeters: CLLocationDistance = 0
     private var totalElevationGainMeters: Double = 0
     private var lastAltitude: Double?
+
+    // Estado de pausa — ver `onPauseTapped`. `pausedDurationTotal` es la
+    // suma de pausas ya cerradas; `pauseStartDate` mide la que está en
+    // curso ahora mismo, para que `currentElapsed()` la vaya restando en
+    // vivo sin esperar a que se pulse "Reanudar".
+    private var isPaused = false
+    private var pauseStartDate: Date?
+    private var pausedDurationTotal: TimeInterval = 0
 
     private var bikes: [MotorbikeModel] = []
     private var selectedBike: MotorbikeModel?
@@ -61,6 +74,9 @@ final class RegisterViewController: UIViewController {
     private let kmValueLabel = UILabel()
     private let speedValueLabel = UILabel()
     private let elevationValueLabel = UILabel()
+    private let pauseButton = UIButton(type: .system)
+    private let pauseIcon = UIImageView()
+    private let pauseLabelView = UILabel()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -423,9 +439,37 @@ final class RegisterViewController: UIViewController {
         activeMapWrapper.translatesAutoresizingMaskIntoConstraints = false
         activeMapWrapper.clipsToBounds = true
 
-        // Fin — ancho completo, ámbar, alto (72pt) para pulsarse con
-        // guantes. Ya no hay botón de pausar: la grabación corre sin
-        // interrupciones desde "Empezar ruta" hasta "Fin".
+        // Pausar/Reanudar — secundario (fondo `bg2`, sin el ámbar sólido
+        // del de Fin) para no competir visualmente con él, pero mismo
+        // alto (72pt) para pulsarse igual de fácil con guantes.
+        pauseIcon.tintColor = AppTheme.text
+        pauseIcon.contentMode = .scaleAspectFit
+        pauseIcon.translatesAutoresizingMaskIntoConstraints = false
+        pauseIcon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+
+        let pauseContent = UIStackView(arrangedSubviews: [pauseIcon, pauseLabelView])
+        pauseContent.axis = .horizontal
+        pauseContent.spacing = 8
+        pauseContent.alignment = .center
+        pauseContent.isUserInteractionEnabled = false
+        pauseContent.translatesAutoresizingMaskIntoConstraints = false
+
+        pauseButton.backgroundColor = AppTheme.bg2
+        pauseButton.layer.cornerRadius = 18
+        pauseButton.layer.borderWidth = 1
+        pauseButton.layer.borderColor = UIColor.white.withAlphaComponent(0.1).cgColor
+        pauseButton.translatesAutoresizingMaskIntoConstraints = false
+        pauseButton.heightAnchor.constraint(equalToConstant: 72).isActive = true
+        pauseButton.addTarget(self, action: #selector(onPauseTapped), for: .touchUpInside)
+        pauseButton.addSubview(pauseContent)
+        NSLayoutConstraint.activate([
+            pauseContent.centerXAnchor.constraint(equalTo: pauseButton.centerXAnchor),
+            pauseContent.centerYAnchor.constraint(equalTo: pauseButton.centerYAnchor),
+        ])
+        updatePauseButton()
+
+        // Fin — ámbar, alto (72pt) para pulsarse con guantes. Reparte el
+        // ancho con "Pausar" en vez de ocupar toda la barra él solo.
         let finishIcon = UIImageView(image: UIImage(systemName: "stop.fill"))
         finishIcon.tintColor = AppTheme.bg0
         finishIcon.contentMode = .scaleAspectFit
@@ -464,12 +508,22 @@ final class RegisterViewController: UIViewController {
         bottomBar.layer.borderColor = UIColor.white.withAlphaComponent(0.08).cgColor
         bottomBar.translatesAutoresizingMaskIntoConstraints = false
 
-        bottomBar.addSubview(finishButton)
+        // Pausar/Reanudar más estrecho que Fin (2:3) — el gesto de
+        // terminar es el que se pulsa una vez y de forma decidida; pausar
+        // se usa varias veces por ruta y no necesita tanto peso.
+        let buttonsRow = UIStackView(arrangedSubviews: [pauseButton, finishButton])
+        buttonsRow.axis = .horizontal
+        buttonsRow.spacing = 10
+        buttonsRow.distribution = .fill
+        pauseButton.widthAnchor.constraint(equalTo: finishButton.widthAnchor, multiplier: 2.0 / 3.0).isActive = true
+        buttonsRow.translatesAutoresizingMaskIntoConstraints = false
+
+        bottomBar.addSubview(buttonsRow)
         NSLayoutConstraint.activate([
-            finishButton.topAnchor.constraint(equalTo: bottomBar.topAnchor, constant: 14),
-            finishButton.bottomAnchor.constraint(equalTo: bottomBar.safeAreaLayoutGuide.bottomAnchor, constant: -4),
-            finishButton.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 16),
-            finishButton.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -16),
+            buttonsRow.topAnchor.constraint(equalTo: bottomBar.topAnchor, constant: 14),
+            buttonsRow.bottomAnchor.constraint(equalTo: bottomBar.safeAreaLayoutGuide.bottomAnchor, constant: -4),
+            buttonsRow.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 16),
+            buttonsRow.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -16),
         ])
 
         // Orden de capas: mapa primero (a pantalla completa, de fondo),
@@ -531,6 +585,59 @@ final class RegisterViewController: UIViewController {
         animation.autoreverses = true
         animation.repeatCount = .infinity
         view.layer.add(animation, forKey: "pulse")
+    }
+
+    // MARK: - Pausa
+
+    private func updatePauseButton() {
+        pauseIcon.image = UIImage(systemName: isPaused ? "play.fill" : "pause.fill")
+        pauseLabelView.styleAsLabel(isPaused ? "Reanudar" : "Pausar", size: 15, color: AppTheme.text, tracking: 1.2)
+    }
+
+    private func updateRecordingStateLabel() {
+        if isPaused {
+            stateLabel.styleAsLabel(
+                "En pausa", size: 12.5, medium: true, color: AppTheme.textSecondary(0.6), tracking: 1.4)
+            recDot.backgroundColor = AppTheme.textSecondary(0.4)
+            recDot.layer.removeAnimation(forKey: "pulse")
+        } else {
+            stateLabel.styleAsLabel("Grabando", size: 12.5, medium: true, color: AppTheme.primary, tracking: 1.4)
+            recDot.backgroundColor = AppTheme.primary
+            addPulseAnimation(to: recDot)
+        }
+    }
+
+    @objc private func onPauseTapped() {
+        guard isRecording else { return }
+        if isPaused {
+            if let pauseStartDate {
+                pausedDurationTotal += Date().timeIntervalSince(pauseStartDate)
+            }
+            pauseStartDate = nil
+            isPaused = false
+            // Abre un tramo nuevo — el siguiente punto grabado será el
+            // primero de ese tramo, sin conectar con una línea recta (ni
+            // sumar como distancia real) el hueco que deja la pausa.
+            trackSegments.append([])
+        } else {
+            isPaused = true
+            pauseStartDate = Date()
+        }
+        updatePauseButton()
+        updateRecordingStateLabel()
+    }
+
+    /// Tiempo de grabación real transcurrido — el reloj de pared menos
+    /// todo el rato que ha estado en pausa, incluida la pausa en curso si
+    /// la hay ahora mismo (así el cronómetro se queda congelado en vivo
+    /// mientras `isPaused`, no solo al mirar las cifras finales).
+    private func currentElapsed() -> TimeInterval {
+        guard let start = rideStartDate else { return 0 }
+        var elapsed = Date().timeIntervalSince(start) - pausedDurationTotal
+        if isPaused, let pauseStartDate {
+            elapsed -= Date().timeIntervalSince(pauseStartDate)
+        }
+        return max(0, elapsed)
     }
 
     // MARK: - Cambiar entre reposo/grabando
@@ -658,14 +765,18 @@ final class RegisterViewController: UIViewController {
         do {
             let ride = try await rideRepository.startRide(riderId: userId, motorbikeId: bike.id)
             currentRide = ride
-            trackCoordinates = []
+            trackSegments = [[]]
             totalDistanceMeters = 0
             totalElevationGainMeters = 0
             lastAltitude = nil
+            isPaused = false
+            pauseStartDate = nil
+            pausedDurationTotal = 0
             rideStartDate = Date()
             UserDefaults.standard.set(ride.id, forKey: Self.pendingRideIdKey)
             activeBikeLabel.styleAsLabel(bike.displayName, size: 12.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.9)
-            stateLabel.styleAsLabel("Grabando", size: 12.5, medium: true, color: AppTheme.primary, tracking: 1.4)
+            updateRecordingStateLabel()
+            updatePauseButton()
             switchToActive()
             startTimer()
             liveActivity.start(motorbikeName: bike.displayName)
@@ -733,18 +844,40 @@ final class RegisterViewController: UIViewController {
         // de mandar para este ride, para que ni el trazado ni las cifras
         // se vean con un hueco al final por algo que en realidad está a
         // salvo en el propio móvil.
-        let backendPoints = ride.trackPoints.map { StatsPoint(coordinate: $0.coordinate, altitude: $0.altitude) }
-        let pendingPoints = trackSyncManager.pendingPoints(forRide: ride.id)
-            .map { StatsPoint(coordinate: $0.coordinate, altitude: $0.altitude) }
-        let allPoints = backendPoints + pendingPoints
+        let backendPoints = ride.trackPoints.map {
+            StatsPoint(coordinate: $0.coordinate, altitude: $0.altitude, isSegmentStart: $0.isSegmentStart, timestamp: $0.timestamp)
+        }
+        let pendingPoints = trackSyncManager.pendingPoints(forRide: ride.id).map {
+            StatsPoint(coordinate: $0.coordinate, altitude: $0.altitude, isSegmentStart: $0.isSegmentStart, timestamp: $0.timestamp)
+        }
+        let recoveredSegments = Self.groupIntoSegments(backendPoints + pendingPoints)
 
         currentRide = ride
-        trackCoordinates = allPoints.map(\.coordinate)
+        // Un tramo nuevo, vacío, siempre al final: da igual si la app se
+        // cerró en pausa o sin más — hay un hueco real de tiempo (y
+        // posiblemente de distancia) entre el último punto grabado y
+        // ahora mismo, que no debe conectarse con una línea recta ni
+        // sumarse como si se hubiera recorrido. Mismo mecanismo que
+        // "Reanudar" tras una pausa en caliente.
+        trackSegments = recoveredSegments.map { $0.map(\.coordinate) } + [[]]
         rideStartDate = ride.startedAt
-        (totalDistanceMeters, totalElevationGainMeters) = Self.recomputeStats(from: allPoints)
-        lastAltitude = allPoints.last?.altitude
+        isPaused = false
+        pauseStartDate = nil
+        (totalDistanceMeters, totalElevationGainMeters) = Self.recomputeStats(from: recoveredSegments)
+        lastAltitude = nil
+        // El tiempo ya transcurrido de pared que no está cubierto por
+        // ningún tramo grabado (pausas reales + el rato que la app pudo
+        // haber estado cerrada) se cuenta como "pausado" a efectos del
+        // cronómetro — mismo criterio que usa el backend para la duración
+        // de la ruta publicada.
+        let activeSoFar = recoveredSegments.reduce(0.0) { total, segment in
+            guard let first = segment.first?.timestamp, let last = segment.last?.timestamp else { return total }
+            return total + max(0, last.timeIntervalSince(first))
+        }
+        pausedDurationTotal = max(0, Date().timeIntervalSince(ride.startedAt) - activeSoFar)
 
-        stateLabel.styleAsLabel("Grabando", size: 12.5, medium: true, color: AppTheme.primary, tracking: 1.4)
+        updateRecordingStateLabel()
+        updatePauseButton()
         switchToActive()
         redrawTrack()
         startTimer()
@@ -759,26 +892,47 @@ final class RegisterViewController: UIViewController {
     private struct StatsPoint {
         let coordinate: CLLocationCoordinate2D
         let altitude: Double?
+        let isSegmentStart: Bool
+        let timestamp: Date
+    }
+
+    /// Trocea una lista plana y ordenada en tramos — un corte nuevo cada
+    /// vez que `isSegmentStart` es `true` (salvo el primer punto, que no
+    /// cuenta como corte: ya es el arranque del primer tramo). Mismo
+    /// criterio que `split_into_segments` en el backend (`app/shared/geo.py`).
+    private static func groupIntoSegments(_ points: [StatsPoint]) -> [[StatsPoint]] {
+        var segments: [[StatsPoint]] = []
+        for (index, point) in points.enumerated() {
+            if index == 0 || point.isSegmentStart {
+                segments.append([])
+            }
+            segments[segments.count - 1].append(point)
+        }
+        return segments
     }
 
     /// Mismas reglas que al ir sumando en vivo (`didUpdateLocations`), pero
-    /// aplicadas de una vez sobre un historial ya grabado.
-    private static func recomputeStats(from points: [StatsPoint]) -> (distance: CLLocationDistance, elevationGain: Double) {
+    /// aplicadas de una vez sobre un historial ya grabado, tramo a tramo —
+    /// nunca se suma distancia/desnivel entre el último punto de un tramo
+    /// y el primero del siguiente (el hueco de una pausa).
+    private static func recomputeStats(from segments: [[StatsPoint]]) -> (distance: CLLocationDistance, elevationGain: Double) {
         var distance: CLLocationDistance = 0
         var elevationGain: Double = 0
-        var lastAltitude: Double?
-        for (index, point) in points.enumerated() {
-            if index > 0 {
-                let previous = points[index - 1]
-                distance += CLLocation(latitude: previous.coordinate.latitude, longitude: previous.coordinate.longitude)
-                    .distance(from: CLLocation(latitude: point.coordinate.latitude, longitude: point.coordinate.longitude))
-            }
-            if let altitude = point.altitude {
-                if let last = lastAltitude {
-                    let delta = altitude - last
-                    if delta > 1 { elevationGain += delta }
+        for segment in segments {
+            var lastAltitude: Double?
+            for (index, point) in segment.enumerated() {
+                if index > 0 {
+                    let previous = segment[index - 1]
+                    distance += CLLocation(latitude: previous.coordinate.latitude, longitude: previous.coordinate.longitude)
+                        .distance(from: CLLocation(latitude: point.coordinate.latitude, longitude: point.coordinate.longitude))
                 }
-                lastAltitude = altitude
+                if let altitude = point.altitude {
+                    if let last = lastAltitude {
+                        let delta = altitude - last
+                        if delta > 1 { elevationGain += delta }
+                    }
+                    lastAltitude = altitude
+                }
             }
         }
         return (distance, elevationGain)
@@ -805,12 +959,17 @@ final class RegisterViewController: UIViewController {
             // `ride.track_points` en el backend, que en este mismo
             // instante todavía podría no tener los últimos puntos si no
             // ha habido cobertura hasta ahora mismo.
-            let pointCount = trackCoordinates.count
-            let publishCoordinates = trackCoordinates
+            let pointCount = trackSegments.reduce(0) { $0 + $1.count }
+            let publishSegments = trackSegments
             let distanceKm = (totalDistanceMeters / 1000 * 100).rounded() / 100
-            let durationMinutes = max(1, Int(Date().timeIntervalSince(rideStartDate ?? Date()) / 60))
+            // `currentElapsed()`, no el reloj de pared en crudo: si se
+            // termina la ruta estando pausada (o hubo alguna pausa antes),
+            // ese rato no debe contarse como duración recorrida.
+            let durationMinutes = max(1, Int(currentElapsed() / 60))
             currentRide = nil
             UserDefaults.standard.removeObject(forKey: Self.pendingRideIdKey)
+            isPaused = false
+            pauseStartDate = nil
             stopTimer()
             liveActivity.end()
             switchToIdle(animated: true)
@@ -842,7 +1001,7 @@ final class RegisterViewController: UIViewController {
                 // cuando quiera.
                 let publish = PublishRouteViewController(
                     source: .freshlyRecorded(
-                        coordinates: publishCoordinates, distanceKm: distanceKm, durationMinutes: durationMinutes),
+                        segments: publishSegments, distanceKm: distanceKm, durationMinutes: durationMinutes),
                     pointCount: pointCount, onPublished: {})
                 present(UINavigationController(rootViewController: publish), animated: true)
             }
@@ -860,18 +1019,22 @@ final class RegisterViewController: UIViewController {
 
     /// Redibuja el trazado entero — tanto al añadir un punto en vivo como
     /// al reconstruir de golpe el historial de una grabación reanudada.
+    /// Un `PolylineAnnotation` por tramo (ver `trackSegments`): así el
+    /// hueco de una pausa no sale dibujado como si fuera carretera
+    /// recorrida.
     private func redrawTrack() {
-        guard trackCoordinates.count >= 2 else { return }
-        var polyline = PolylineAnnotation(lineCoordinates: trackCoordinates)
-        polyline.lineColor = StyleColor(AppTheme.primary)
-        polyline.lineWidth = 7
-        // Borde oscuro alrededor del trazado ámbar — sin él, la línea se
-        // mezcla con el fondo claro del estilo `outdoors` en zonas de
-        // asfalto/tierra parecidas en tono. Con el borde se recorta igual
-        // de bien sobre calles claras que oscuras.
-        polyline.lineBorderColor = StyleColor(AppTheme.bg0)
-        polyline.lineBorderWidth = 1.6
-        polylineManager?.annotations = [polyline]
+        polylineManager?.annotations = trackSegments.filter { $0.count >= 2 }.map { segment in
+            var polyline = PolylineAnnotation(lineCoordinates: segment)
+            polyline.lineColor = StyleColor(AppTheme.primary)
+            polyline.lineWidth = 7
+            // Borde oscuro alrededor del trazado ámbar — sin él, la línea
+            // se mezcla con el fondo claro del estilo `outdoors` en zonas
+            // de asfalto/tierra parecidas en tono. Con el borde se recorta
+            // igual de bien sobre calles claras que oscuras.
+            polyline.lineBorderColor = StyleColor(AppTheme.bg0)
+            polyline.lineBorderWidth = 1.6
+            return polyline
+        }
     }
 
     private func stopTimer() {
@@ -880,8 +1043,12 @@ final class RegisterViewController: UIViewController {
     }
 
     private func updateActiveStats() {
-        guard let start = rideStartDate else { return }
-        let elapsed = Date().timeIntervalSince(start)
+        guard rideStartDate != nil else { return }
+        // `currentElapsed()`, no el reloj de pared: mientras `isPaused`
+        // se queda congelado en vez de seguir sumando, y al terminar una
+        // pausa no arrastra ese rato ni en el cronómetro ni en la
+        // velocidad media.
+        let elapsed = currentElapsed()
         let elapsedSeconds = Int(elapsed)
         timeLabel.text = String(format: "%02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60)
 
@@ -938,19 +1105,31 @@ extension RegisterViewController: CLLocationManagerDelegate {
         }
 
         guard isRecording, let ride = currentRide else { return }
+        // En pausa no se toca el trazado, ni las cifras, ni la cola de
+        // sync — solo el chip de GPS y la cámara de arriba, que siguen
+        // igual que en reposo. Ver `onPauseTapped`.
+        guard !isPaused else { return }
 
-        if let previous = trackCoordinates.last {
+        // ¿Primer punto de un tramo nuevo? (el arranque de la ruta, o
+        // justo tras un "Reanudar"). Si lo es, no hay un "punto anterior"
+        // real dentro de este tramo con el que comparar — ni distancia ni
+        // desnivel se calculan contra el último punto de ANTES de la
+        // pausa, para no contar como recorrido el salto que deja el hueco.
+        let isNewSegment = trackSegments[trackSegments.count - 1].isEmpty
+        if !isNewSegment, let previous = trackSegments[trackSegments.count - 1].last {
             totalDistanceMeters += CLLocation(latitude: previous.latitude, longitude: previous.longitude)
                 .distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
         }
-        if location.altitude != 0 || lastAltitude != nil {
+        if isNewSegment {
+            lastAltitude = location.altitude
+        } else if location.altitude != 0 || lastAltitude != nil {
             if let previousAltitude = lastAltitude {
                 let delta = location.altitude - previousAltitude
                 if delta > 1 { totalElevationGainMeters += delta }
             }
             lastAltitude = location.altitude
         }
-        trackCoordinates.append(coordinate)
+        trackSegments[trackSegments.count - 1].append(coordinate)
         redrawTrack()
 
         // Antes se mandaba directo a la red con un `try?` que se tragaba
@@ -964,7 +1143,7 @@ extension RegisterViewController: CLLocationManagerDelegate {
         trackSyncManager.enqueue(rideId: ride.id, point: PendingTrackPoint(
             latitude: coordinate.latitude, longitude: coordinate.longitude,
             altitude: location.altitude, speed: location.speed >= 0 ? location.speed * 3.6 : nil,
-            timestamp: location.timestamp))
+            timestamp: location.timestamp, isSegmentStart: isNewSegment))
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

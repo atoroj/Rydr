@@ -247,7 +247,7 @@ final class FeedItemCell: UICollectionViewCell {
             statsRow.addArrangedSubview(statCell(value: value.0, unit: value.1, showsLeadingDivider: index > 0))
         }
 
-        let snapshotURL = RouteMapSnapshot.url(for: item.route.path)
+        let snapshotURL = RouteMapSnapshot.url(for: item.route.segments)
         mapImage.load(
             urlString: snapshotURL?.absoluteString ?? item.route.coverImageUrl,
             placeholder: UIImage(systemName: "map"))

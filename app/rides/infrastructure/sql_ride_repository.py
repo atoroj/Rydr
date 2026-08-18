@@ -21,6 +21,7 @@ class SqlAlchemyRideRepository(RideRepository):
             altitude=model.altitude,
             speed=model.speed,
             timestamp=model.timestamp,
+            is_segment_start=model.is_segment_start or False,
         )
 
     def _to_ride(self, model: RideModel) -> Ride:
@@ -74,6 +75,7 @@ class SqlAlchemyRideRepository(RideRepository):
             altitude=track_point.altitude,
             speed=track_point.speed,
             timestamp=track_point.timestamp,
+            is_segment_start=track_point.is_segment_start,
         )
         self.db.add(tp_db)
         self.db.commit()

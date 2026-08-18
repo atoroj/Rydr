@@ -14,6 +14,11 @@ class TrackPointModel(Base):
     altitude = Column(Float, nullable=True)
     speed = Column(Float, nullable=True)
     timestamp = Column(DateTime, nullable=False)
+    # True para el primer punto grabado tras un "Reanudar" — marca dónde
+    # empieza un tramo nuevo del trazado, para no conectar con una línea
+    # recta (ni sumar como distancia real) el hueco de una pausa. Ver
+    # `RouteService.create_route_from_ride`.
+    is_segment_start = Column(Boolean, default=False)
 
 
 class RideModel(Base):

@@ -15,6 +15,8 @@ class AddTrackPointRequest(BaseModel):
     altitude: Optional[float] = None
     speed: Optional[float] = None
     timestamp: datetime
+    # Primer punto de un tramo nuevo tras una pausa — ver TrackPointModel.
+    is_segment_start: bool = False
 
 
 class AddTrackPointsBatchRequest(BaseModel):
@@ -36,6 +38,7 @@ class TrackPointResponse(BaseModel):
     altitude: Optional[float] = None
     speed: Optional[float] = None
     timestamp: datetime
+    is_segment_start: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -11,6 +11,8 @@ class TrackPoint:
     altitude: float | None
     speed: float | None  # km/h
     timestamp: datetime
+    # Primer punto de un tramo nuevo tras una pausa — ver `TrackPointModel`.
+    is_segment_start: bool = False
 
 
 @dataclass

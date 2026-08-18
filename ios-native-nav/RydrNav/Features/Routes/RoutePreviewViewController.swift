@@ -141,8 +141,10 @@ final class RoutePreviewViewController: UIViewController {
         var polylines: [PolylineAnnotation] = []
         var boundsCoordinates = route.path
 
-        if route.path.count >= 2 {
-            var exactRoute = PolylineAnnotation(lineCoordinates: route.path)
+        // Un `PolylineAnnotation` por tramo — ver `RouteModel.segments` —
+        // para no dibujar el hueco de una pausa como si fuera carretera.
+        for segment in route.segments where segment.count >= 2 {
+            var exactRoute = PolylineAnnotation(lineCoordinates: segment)
             exactRoute.lineColor = StyleColor(AppTheme.primary)
             exactRoute.lineWidth = 4
             polylines.append(exactRoute)
