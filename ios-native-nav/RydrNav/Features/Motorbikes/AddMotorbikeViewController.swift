@@ -183,7 +183,7 @@ final class AddMotorbikeViewController: UIViewController {
                     self.onSaved()
                     self.dismiss(animated: true)
                 } catch {
-                    self.showError("No se pudo eliminar: \(error.localizedDescription)")
+                    self.showAlert(message: "No se pudo eliminar: \(error.localizedDescription)")
                 }
             }
         })
@@ -195,7 +195,7 @@ final class AddMotorbikeViewController: UIViewController {
               let model = modelField.text, !model.isEmpty,
               let ccText = ccField.text, let cc = Int(ccText)
         else {
-            showError("Rellena marca, modelo y cilindrada.")
+            showAlert(message: "Rellena marca, modelo y cilindrada.")
             return
         }
 
@@ -224,16 +224,11 @@ final class AddMotorbikeViewController: UIViewController {
                 dismiss(animated: true)
             } catch {
                 navigationItem.rightBarButtonItem?.isEnabled = true
-                showError("No se pudo guardar: \(error.localizedDescription)")
+                showAlert(message: "No se pudo guardar: \(error.localizedDescription)")
             }
         }
     }
 
-    private func showError(_ message: String) {
-        let alert = UIAlertController(title: "Vaya", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
-    }
 
     private func applyPhotoPreview(_ image: UIImage) {
         photoButton.setTitle(nil, for: .normal)

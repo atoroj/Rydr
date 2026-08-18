@@ -23,8 +23,12 @@ struct Meetup: Codable, Equatable, Identifiable {
     let title: String
     let description: String?
     let locationName: String?
-    let locationLat: Double
-    let locationLng: Double
+    // `nil` cuando el punto exacto está oculto para quien mira (no
+    // apuntado, o apuntado pero el organizador aún no la ha revelado) —
+    // el backend directamente no lo manda, no es un filtro local. Ver
+    // `approximateArea`/`locationHidden`/`locationRevealed`.
+    let locationLat: Double?
+    let locationLng: Double?
     let scheduledAt: Date
     let maxParticipants: Int?
     let participantCount: Int
@@ -32,6 +36,15 @@ struct Meetup: Codable, Equatable, Identifiable {
     let isJoined: Bool
     let isOrganizer: Bool
     let createdAt: Date
+    /// Texto libre ("Sierra de Guadarrama"...) visible siempre que esté
+    /// puesto, apuntado o no — sustituye al punto exacto mientras esté
+    /// oculto.
+    let approximateArea: String?
+    /// Si esta quedada usa la función de ubicación oculta.
+    let locationHidden: Bool
+    /// Si el organizador ya la ha revelado (una vez `true`, no vuelve a
+    /// `false`).
+    let locationRevealed: Bool
 
     enum CodingKeys: String, CodingKey {
         case id, organizer, title, description
@@ -45,10 +58,14 @@ struct Meetup: Codable, Equatable, Identifiable {
         case isJoined = "is_joined"
         case isOrganizer = "is_organizer"
         case createdAt = "created_at"
+        case approximateArea = "approximate_area"
+        case locationHidden = "location_hidden"
+        case locationRevealed = "location_revealed"
     }
 
-    var coordinate: CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: locationLat, longitude: locationLng)
+    var coordinate: CLLocationCoordinate2D? {
+        guard let locationLat, let locationLng else { return nil }
+        return CLLocationCoordinate2D(latitude: locationLat, longitude: locationLng)
     }
 
     var isFull: Bool {

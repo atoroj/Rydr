@@ -17,6 +17,9 @@ class MeetupModel(Base):
     max_participants = Column(Integer, nullable=True)
     is_private = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, nullable=False)
+    location_hidden = Column(Boolean, default=False, nullable=False)
+    approximate_area = Column(String, nullable=True)
+    location_revealed = Column(Boolean, default=False, nullable=False)
 
 
 class MeetupParticipantModel(Base):

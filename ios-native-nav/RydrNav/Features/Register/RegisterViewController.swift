@@ -9,43 +9,27 @@ import UIKit
 /// mapa con el trazado en vivo. Se abre a pantalla completa desde el botón
 /// "Registrar" de `MainTabBarController`.
 final class RegisterViewController: UIViewController {
-    private var mapView: MapView!
+    // Sin `private`: `RegisterViewController+UI.swift` (construcción de
+    // vistas, sin estado de grabación) necesita leerlos/escribirlos —
+    // `private` en Swift es por archivo, no por clase. Sigue sin ser
+    // visible fuera del módulo, nada cambia de cara afuera.
+    var mapView: MapView!
     private let locationManager = CLLocationManager()
     private let rideRepository = RideRepository()
     private let motorbikeRepository = MotorbikeRepository()
 
     private var currentRide: RideModel?
-    // Cada tramo por separado (un tramo nuevo se abre al pulsar
-    // "Reanudar" tras una pausa) — así ni el trazado en vivo ni las
-    // cifras conectan el hueco de la pausa como si fuera carretera
-    // recorrida. Sin pausas, sigue habiendo un único tramo con todos los
-    // puntos, igual que siempre.
-    private var trackSegments: [[CLLocationCoordinate2D]] = [[]]
-    private var polylineManager: PolylineAnnotationManager?
+    // Tramos, distancia/desnivel acumulados, pausa y cronómetro — toda la
+    // aritmética de grabar una ruta vive en esta clase (sin UIKit,
+    // testable con XCTest), no aquí. Ver `Core/Recording/RideRecordingSession.swift`.
+    private let recordingSession = RideRecordingSession()
+    var polylineManager: PolylineAnnotationManager?
     private var lastCameraUpdate: Date?
     private var authorizationContinuation: CheckedContinuation<CLAuthorizationStatus, Never>?
-    private var rideStartDate: Date?
     private var recordingTimer: Timer?
     private let liveActivity = RydrRideLiveActivityController()
     private let trackSyncManager = RideTrackSyncManager.shared
     private var foregroundObserver: NSObjectProtocol?
-
-    // Cifras reales de la grabación en curso — nada de datos de relleno:
-    // la distancia sale de sumar la distancia entre puntos consecutivos,
-    // el desnivel de sumar solo los tramos en que la altitud sube (>1m,
-    // para no acumular el ruido normal del GPS/barómetro), y la velocidad
-    // media de distancia ÷ tiempo transcurrido.
-    private var totalDistanceMeters: CLLocationDistance = 0
-    private var totalElevationGainMeters: Double = 0
-    private var lastAltitude: Double?
-
-    // Estado de pausa — ver `onPauseTapped`. `pausedDurationTotal` es la
-    // suma de pausas ya cerradas; `pauseStartDate` mide la que está en
-    // curso ahora mismo, para que `currentElapsed()` la vaya restando en
-    // vivo sin esperar a que se pulse "Reanudar".
-    private var isPaused = false
-    private var pauseStartDate: Date?
-    private var pausedDurationTotal: TimeInterval = 0
 
     private var bikes: [MotorbikeModel] = []
     private var selectedBike: MotorbikeModel?
@@ -54,29 +38,29 @@ final class RegisterViewController: UIViewController {
 
     // MARK: - Vistas compartidas entre los dos estados
 
-    private let idleContainer = UIView()
-    private let activeContainer = UIView()
-    private let idleMapWrapper = UIView()
-    private let activeMapWrapper = UIView()
+    let idleContainer = UIView()
+    let activeContainer = UIView()
+    let idleMapWrapper = UIView()
+    let activeMapWrapper = UIView()
 
     // Estado "en reposo".
-    private let gpsChipDot = UIView()
-    private let gpsChipLabel = UILabel()
-    private let bikeCardLabel = UILabel()
-    private let bikeCardCaption = UILabel()
-    private let startButton = UIButton(type: .system)
+    let gpsChipDot = UIView()
+    let gpsChipLabel = UILabel()
+    let bikeCardLabel = UILabel()
+    let bikeCardCaption = UILabel()
+    let startButton = UIButton(type: .system)
 
     // Estado "grabando".
-    private let recDot = UIView()
-    private let stateLabel = UILabel()
-    private let activeBikeLabel = UILabel()
-    private let timeLabel = UILabel()
-    private let kmValueLabel = UILabel()
-    private let speedValueLabel = UILabel()
-    private let elevationValueLabel = UILabel()
-    private let pauseButton = UIButton(type: .system)
-    private let pauseIcon = UIImageView()
-    private let pauseLabelView = UILabel()
+    let recDot = UIView()
+    let stateLabel = UILabel()
+    let activeBikeLabel = UILabel()
+    let timeLabel = UILabel()
+    let kmValueLabel = UILabel()
+    let speedValueLabel = UILabel()
+    let elevationValueLabel = UILabel()
+    let pauseButton = UIButton(type: .system)
+    let pauseIcon = UIImageView()
+    let pauseLabelView = UILabel()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -123,479 +107,16 @@ final class RegisterViewController: UIViewController {
         }
     }
 
-    // MARK: - Mapa compartido
-
-    private func setupMap() {
-        mapView = MapView(frame: .zero, mapInitOptions: MapInitOptions(styleURI: .outdoors))
-        mapView.location.options = LocationOptions(
-            puckType: .puck2D(Self.brandedPuck), puckBearing: .heading, puckBearingEnabled: true)
-        polylineManager = mapView.annotations.makePolylineAnnotationManager()
-        polylineManager?.lineCap = .round
-        polylineManager?.lineJoin = .round
-    }
-
-    /// Punto de posición en el ámbar de marca (con anillo de precisión y
-    /// pulso a juego) en vez del azul por defecto del SDK — mismo espíritu
-    /// que `RydrNavigationStyle`, aplicado aquí también.
-    private static let brandedPuck: Puck2DConfiguration = {
-        var puck = Puck2DConfiguration(topImage: dotImage())
-        puck.pulsing = .init(color: AppTheme.primary, radius: .accuracy)
-        puck.showsAccuracyRing = true
-        puck.accuracyRingColor = AppTheme.primary.withAlphaComponent(0.12)
-        puck.accuracyRingBorderColor = AppTheme.primary.withAlphaComponent(0.3)
-        return puck
-    }()
-
-    private static func dotImage() -> UIImage {
-        let size = CGSize(width: 22, height: 22)
-        return UIGraphicsImageRenderer(size: size).image { _ in
-            let rect = CGRect(origin: .zero, size: size).insetBy(dx: 2, dy: 2)
-            AppTheme.bg0.setFill()
-            UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).fill()
-            AppTheme.primary.setFill()
-            UIBezierPath(ovalIn: rect).fill()
-        }
-    }
-
-    /// Traslada el mapa compartido al contenedor del estado que toca
-    /// mostrar — así la cámara y el trazado dibujado no se reinician al
-    /// pasar de reposo a grabando.
-    private func moveMapView(to wrapper: UIView) {
-        guard mapView.superview !== wrapper else { return }
-        mapView.removeFromSuperview()
-        mapView.translatesAutoresizingMaskIntoConstraints = false
-        wrapper.addSubview(mapView)
-        NSLayoutConstraint.activate([
-            mapView.topAnchor.constraint(equalTo: wrapper.topAnchor),
-            mapView.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
-            mapView.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
-            mapView.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
-        ])
-    }
-
-    /// Botón de cerrar en cristal de verdad (Liquid Glass en iOS 26,
-    /// esmerilado normal antes) en vez del círculo negro semitransparente
-    /// de antes — aquí sí tiene sentido notarse, porque detrás siempre hay
-    /// mapa en movimiento, a diferencia de la barra inferior (fondo plano)
-    /// donde lo probamos primero.
-    private func setupCloseButton() {
-        let effect: UIVisualEffect
-        if #available(iOS 26.0, *) {
-            effect = UIGlassEffect(style: .regular)
-        } else {
-            effect = UIBlurEffect(style: .systemChromeMaterial)
-        }
-        let glass = UIVisualEffectView(effect: effect)
-        glass.layer.cornerRadius = 18
-        glass.clipsToBounds = true
-        glass.translatesAutoresizingMaskIntoConstraints = false
-
-        let button = UIButton(type: .system)
-        button.setImage(UIImage(systemName: "xmark"), for: .normal)
-        button.tintColor = .white
-        button.translatesAutoresizingMaskIntoConstraints = false
-        button.addTarget(self, action: #selector(onCloseTapped), for: .touchUpInside)
-        glass.contentView.addSubview(button)
-        NSLayoutConstraint.activate([
-            button.centerXAnchor.constraint(equalTo: glass.centerXAnchor),
-            button.centerYAnchor.constraint(equalTo: glass.centerYAnchor),
-        ])
-
-        view.addSubview(glass)
-        NSLayoutConstraint.activate([
-            glass.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            glass.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
-            glass.widthAnchor.constraint(equalToConstant: 36),
-            glass.heightAnchor.constraint(equalToConstant: 36),
-        ])
-    }
-
-    // MARK: - Estado "en reposo" (is.recIdle)
-
-    private func setupIdleContainer() {
-        idleContainer.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(idleContainer)
-        NSLayoutConstraint.activate([
-            idleContainer.topAnchor.constraint(equalTo: view.topAnchor),
-            idleContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            idleContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            idleContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
-
-        idleMapWrapper.translatesAutoresizingMaskIntoConstraints = false
-        idleMapWrapper.clipsToBounds = true
-
-        gpsChipDot.backgroundColor = AppTheme.textSecondary(0.3)
-        gpsChipDot.layer.cornerRadius = 3.5
-        gpsChipDot.translatesAutoresizingMaskIntoConstraints = false
-        gpsChipDot.widthAnchor.constraint(equalToConstant: 7).isActive = true
-        gpsChipDot.heightAnchor.constraint(equalToConstant: 7).isActive = true
-
-        gpsChipLabel.styleAsLabel("Buscando GPS…", size: 12, medium: true, color: AppTheme.textSecondary(0.75), tracking: 0.7)
-
-        let gpsChip = UIStackView(arrangedSubviews: [gpsChipDot, gpsChipLabel])
-        gpsChip.axis = .horizontal
-        gpsChip.spacing = 9
-        gpsChip.alignment = .center
-        gpsChip.isLayoutMarginsRelativeArrangement = true
-        gpsChip.layoutMargins = UIEdgeInsets(top: 9, left: 12, bottom: 9, right: 12)
-        gpsChip.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-        gpsChip.layer.cornerRadius = 11
-        gpsChip.clipsToBounds = true
-        gpsChip.translatesAutoresizingMaskIntoConstraints = false
-
-        idleMapWrapper.addSubview(gpsChip)
-        NSLayoutConstraint.activate([
-            gpsChip.topAnchor.constraint(equalTo: idleMapWrapper.safeAreaLayoutGuide.topAnchor, constant: 8),
-            gpsChip.leadingAnchor.constraint(equalTo: idleMapWrapper.leadingAnchor, constant: 54),
-            gpsChip.trailingAnchor.constraint(lessThanOrEqualTo: idleMapWrapper.trailingAnchor, constant: -14),
-        ])
-
-        let bikeCard = buildBikeSelectorCard()
-
-        startButton.backgroundColor = AppTheme.primary
-        startButton.layer.cornerRadius = 22
-        startButton.layer.shadowColor = AppTheme.primary.cgColor
-        startButton.layer.shadowOpacity = 0.35
-        startButton.layer.shadowRadius = 14
-        startButton.layer.shadowOffset = CGSize(width: 0, height: 8)
-        startButton.heightAnchor.constraint(equalToConstant: 88).isActive = true
-        startButton.addTarget(self, action: #selector(onStartTapped), for: .touchUpInside)
-
-        let startTitle = UILabel()
-        startTitle.styleAsLabel("Empezar ruta", size: 24, color: AppTheme.bg0, tracking: 2)
-        let startSubtitle = UILabel()
-        startSubtitle.styleAsLabel("se graba en segundo plano", size: 11.5, medium: true, color: AppTheme.bg0.withAlphaComponent(0.6), tracking: 0.8)
-        let startTextStack = UIStackView(arrangedSubviews: [startTitle, startSubtitle])
-        startTextStack.axis = .vertical
-        startTextStack.spacing = 2
-        startTextStack.alignment = .center
-        startTextStack.isUserInteractionEnabled = false
-        startTextStack.translatesAutoresizingMaskIntoConstraints = false
-        startButton.addSubview(startTextStack)
-        NSLayoutConstraint.activate([
-            startTextStack.centerXAnchor.constraint(equalTo: startButton.centerXAnchor),
-            startTextStack.centerYAnchor.constraint(equalTo: startButton.centerYAnchor),
-        ])
-
-        let contentStack = UIStackView(arrangedSubviews: [bikeCard, startButton])
-        contentStack.axis = .vertical
-        contentStack.spacing = 12
-        contentStack.translatesAutoresizingMaskIntoConstraints = false
-
-        idleContainer.addSubview(idleMapWrapper)
-        idleContainer.addSubview(contentStack)
-        NSLayoutConstraint.activate([
-            idleMapWrapper.topAnchor.constraint(equalTo: idleContainer.topAnchor),
-            idleMapWrapper.leadingAnchor.constraint(equalTo: idleContainer.leadingAnchor),
-            idleMapWrapper.trailingAnchor.constraint(equalTo: idleContainer.trailingAnchor),
-            // Ya no una altura fija — el mapa ocupa todo lo que sobra por
-            // encima de la tarjeta de moto + botón de empezar (que ahora,
-            // sin los dos botones secundarios que había debajo, también
-            // dejan más hueco libre).
-            idleMapWrapper.bottomAnchor.constraint(equalTo: contentStack.topAnchor, constant: -16),
-
-            contentStack.leadingAnchor.constraint(equalTo: idleContainer.leadingAnchor, constant: 16),
-            contentStack.trailingAnchor.constraint(equalTo: idleContainer.trailingAnchor, constant: -16),
-            contentStack.bottomAnchor.constraint(
-                equalTo: idleContainer.safeAreaLayoutGuide.bottomAnchor, constant: -12),
-        ])
-    }
-
-    private func buildBikeSelectorCard() -> UIView {
-        let card = UIView()
-        card.backgroundColor = AppTheme.cardBackground
-        card.layer.cornerRadius = 14
-        card.layer.borderWidth = 1
-        card.layer.borderColor = AppTheme.cardBorder.cgColor
-        card.isUserInteractionEnabled = true
-        card.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(onChangeBikeTapped)))
-
-        let swatch = UIView()
-        swatch.backgroundColor = AppTheme.bg3
-        swatch.layer.cornerRadius = 8
-        swatch.translatesAutoresizingMaskIntoConstraints = false
-        swatch.widthAnchor.constraint(equalToConstant: 44).isActive = true
-        swatch.heightAnchor.constraint(equalToConstant: 34).isActive = true
-
-        bikeCardLabel.font = AppFont.body(14.5, .semibold)
-        bikeCardLabel.textColor = AppTheme.text
-        bikeCardLabel.text = "Cargando tus motos…"
-
-        bikeCardCaption.styleAsLabel("Moto actual · cambiar", size: 11.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.6)
-
-        let textStack = UIStackView(arrangedSubviews: [bikeCardLabel, bikeCardCaption])
-        textStack.axis = .vertical
-        textStack.spacing = 2
-
-        let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
-        chevron.tintColor = AppTheme.textSecondary(0.5)
-        chevron.contentMode = .scaleAspectFit
-        chevron.translatesAutoresizingMaskIntoConstraints = false
-        chevron.widthAnchor.constraint(equalToConstant: 14).isActive = true
-
-        let row = UIStackView(arrangedSubviews: [swatch, textStack, chevron])
-        row.axis = .horizontal
-        row.spacing = 11
-        row.alignment = .center
-        row.isUserInteractionEnabled = false
-        row.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(row)
-        NSLayoutConstraint.activate([
-            row.topAnchor.constraint(equalTo: card.topAnchor, constant: 12),
-            row.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -12),
-            row.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 13),
-            row.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -13),
-        ])
-        return card
-    }
-
-    // MARK: - Estado "grabando" (is.recActive)
-
-    private func setupActiveContainer() {
-        activeContainer.translatesAutoresizingMaskIntoConstraints = false
-        activeContainer.backgroundColor = AppTheme.bg1
-        view.addSubview(activeContainer)
-        NSLayoutConstraint.activate([
-            activeContainer.topAnchor.constraint(equalTo: view.topAnchor),
-            activeContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            activeContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            activeContainer.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
-
-        recDot.backgroundColor = AppTheme.primary
-        recDot.layer.cornerRadius = 4.5
-        recDot.translatesAutoresizingMaskIntoConstraints = false
-        recDot.widthAnchor.constraint(equalToConstant: 9).isActive = true
-        recDot.heightAnchor.constraint(equalToConstant: 9).isActive = true
-        addPulseAnimation(to: recDot)
-
-        stateLabel.styleAsLabel("Grabando", size: 12.5, medium: true, color: AppTheme.primary, tracking: 1.4)
-        activeBikeLabel.styleAsLabel(size: 12.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.9)
-
-        let headerRow = UIStackView(arrangedSubviews: [recDot, stateLabel, UIView(), activeBikeLabel])
-        headerRow.axis = .horizontal
-        headerRow.spacing = 9
-        headerRow.alignment = .center
-        headerRow.translatesAutoresizingMaskIntoConstraints = false
-
-        // Más pequeño que antes (era 70pt a toda plana, empujando el mapa
-        // hacia abajo) — ahora vive dentro de una tarjeta flotante sobre el
-        // mapa a pantalla completa, así que no necesita tanto peso visual;
-        // el trazado en vivo es el protagonista, no el cronómetro.
-        timeLabel.font = AppFont.data(46)
-        timeLabel.textColor = AppTheme.text
-        timeLabel.text = "00:00"
-
-        let timeCaption = UILabel()
-        timeCaption.styleAsLabel("en marcha", size: 11, color: AppTheme.textSecondary(0.42), tracking: 1.6)
-
-        let statsRow = UIStackView(arrangedSubviews: [
-            activeStatCard(valueLabel: kmValueLabel, caption: "km"),
-            activeStatCard(valueLabel: speedValueLabel, caption: "km/h med"),
-            activeStatCard(valueLabel: elevationValueLabel, caption: "m+"),
-        ])
-        statsRow.axis = .horizontal
-        statsRow.spacing = 10
-        statsRow.distribution = .fillEqually
-
-        let infoStack = UIStackView(arrangedSubviews: [headerRow, timeLabel, timeCaption, statsRow])
-        infoStack.axis = .vertical
-        // .fill (no .leading): headerRow necesita estirarse a todo el
-        // ancho para que su spacer empuje `activeBikeLabel` al borde
-        // derecho, y statsRow para que las 3 tarjetas repartan el ancho
-        // completo — con `.leading` ambos se quedaban encogidos a su
-        // tamaño intrínseco. timeLabel/timeCaption son texto normal, con
-        // `.fill` simplemente ocupan el ancho de más sin cambiar cómo se
-        // ven (siguen alineados a la izquierda).
-        infoStack.alignment = .fill
-        infoStack.spacing = 4
-        infoStack.setCustomSpacing(14, after: timeCaption)
-        infoStack.translatesAutoresizingMaskIntoConstraints = false
-
-        // Tarjeta flotante (cristal oscuro semitransparente + sombra) en
-        // vez del bloque opaco de antes que ocupaba su propia franja fija
-        // encima del mapa — ahora el mapa va a pantalla completa por
-        // detrás y esta tarjeta flota sobre él, dejando mucho más mapa (y
-        // trazado) visible, como se pidió.
-        let infoCard = UIView()
-        infoCard.backgroundColor = AppTheme.bg1.withAlphaComponent(0.88)
-        infoCard.layer.cornerRadius = 18
-        infoCard.layer.borderWidth = 1
-        infoCard.layer.borderColor = UIColor.white.withAlphaComponent(0.08).cgColor
-        infoCard.layer.shadowColor = UIColor.black.cgColor
-        infoCard.layer.shadowOpacity = 0.35
-        infoCard.layer.shadowRadius = 16
-        infoCard.layer.shadowOffset = CGSize(width: 0, height: 8)
-        infoCard.translatesAutoresizingMaskIntoConstraints = false
-        infoCard.addSubview(infoStack)
-        NSLayoutConstraint.activate([
-            infoStack.topAnchor.constraint(equalTo: infoCard.topAnchor, constant: 14),
-            infoStack.bottomAnchor.constraint(equalTo: infoCard.bottomAnchor, constant: -14),
-            infoStack.leadingAnchor.constraint(equalTo: infoCard.leadingAnchor, constant: 14),
-            infoStack.trailingAnchor.constraint(equalTo: infoCard.trailingAnchor, constant: -14),
-        ])
-
-        activeMapWrapper.translatesAutoresizingMaskIntoConstraints = false
-        activeMapWrapper.clipsToBounds = true
-
-        // Pausar/Reanudar — secundario (fondo `bg2`, sin el ámbar sólido
-        // del de Fin) para no competir visualmente con él, pero mismo
-        // alto (72pt) para pulsarse igual de fácil con guantes.
-        pauseIcon.tintColor = AppTheme.text
-        pauseIcon.contentMode = .scaleAspectFit
-        pauseIcon.translatesAutoresizingMaskIntoConstraints = false
-        pauseIcon.widthAnchor.constraint(equalToConstant: 16).isActive = true
-
-        let pauseContent = UIStackView(arrangedSubviews: [pauseIcon, pauseLabelView])
-        pauseContent.axis = .horizontal
-        pauseContent.spacing = 8
-        pauseContent.alignment = .center
-        pauseContent.isUserInteractionEnabled = false
-        pauseContent.translatesAutoresizingMaskIntoConstraints = false
-
-        pauseButton.backgroundColor = AppTheme.bg2
-        pauseButton.layer.cornerRadius = 18
-        pauseButton.layer.borderWidth = 1
-        pauseButton.layer.borderColor = UIColor.white.withAlphaComponent(0.1).cgColor
-        pauseButton.translatesAutoresizingMaskIntoConstraints = false
-        pauseButton.heightAnchor.constraint(equalToConstant: 72).isActive = true
-        pauseButton.addTarget(self, action: #selector(onPauseTapped), for: .touchUpInside)
-        pauseButton.addSubview(pauseContent)
-        NSLayoutConstraint.activate([
-            pauseContent.centerXAnchor.constraint(equalTo: pauseButton.centerXAnchor),
-            pauseContent.centerYAnchor.constraint(equalTo: pauseButton.centerYAnchor),
-        ])
-        updatePauseButton()
-
-        // Fin — ámbar, alto (72pt) para pulsarse con guantes. Reparte el
-        // ancho con "Pausar" en vez de ocupar toda la barra él solo.
-        let finishIcon = UIImageView(image: UIImage(systemName: "stop.fill"))
-        finishIcon.tintColor = AppTheme.bg0
-        finishIcon.contentMode = .scaleAspectFit
-        finishIcon.translatesAutoresizingMaskIntoConstraints = false
-        finishIcon.widthAnchor.constraint(equalToConstant: 16).isActive = true
-
-        let finishLabel = UILabel()
-        finishLabel.styleAsLabel("Fin", size: 15, color: AppTheme.bg0, tracking: 1.2)
-
-        let finishContent = UIStackView(arrangedSubviews: [finishIcon, finishLabel])
-        finishContent.axis = .horizontal
-        finishContent.spacing = 8
-        finishContent.alignment = .center
-        finishContent.isUserInteractionEnabled = false
-        finishContent.translatesAutoresizingMaskIntoConstraints = false
-
-        let finishButton = UIButton(type: .system)
-        finishButton.backgroundColor = AppTheme.primary
-        finishButton.layer.cornerRadius = 18
-        finishButton.layer.shadowColor = AppTheme.primary.cgColor
-        finishButton.layer.shadowOpacity = 0.3
-        finishButton.layer.shadowRadius = 10
-        finishButton.layer.shadowOffset = CGSize(width: 0, height: 6)
-        finishButton.translatesAutoresizingMaskIntoConstraints = false
-        finishButton.heightAnchor.constraint(equalToConstant: 72).isActive = true
-        finishButton.addTarget(self, action: #selector(onFinishTapped), for: .touchUpInside)
-        finishButton.addSubview(finishContent)
-        NSLayoutConstraint.activate([
-            finishContent.centerXAnchor.constraint(equalTo: finishButton.centerXAnchor),
-            finishContent.centerYAnchor.constraint(equalTo: finishButton.centerYAnchor),
-        ])
-
-        let bottomBar = UIView()
-        bottomBar.backgroundColor = AppTheme.bg1
-        bottomBar.layer.borderWidth = 1
-        bottomBar.layer.borderColor = UIColor.white.withAlphaComponent(0.08).cgColor
-        bottomBar.translatesAutoresizingMaskIntoConstraints = false
-
-        // Pausar/Reanudar más estrecho que Fin (2:3) — el gesto de
-        // terminar es el que se pulsa una vez y de forma decidida; pausar
-        // se usa varias veces por ruta y no necesita tanto peso.
-        let buttonsRow = UIStackView(arrangedSubviews: [pauseButton, finishButton])
-        buttonsRow.axis = .horizontal
-        buttonsRow.spacing = 10
-        buttonsRow.distribution = .fill
-        pauseButton.widthAnchor.constraint(equalTo: finishButton.widthAnchor, multiplier: 2.0 / 3.0).isActive = true
-        buttonsRow.translatesAutoresizingMaskIntoConstraints = false
-
-        bottomBar.addSubview(buttonsRow)
-        NSLayoutConstraint.activate([
-            buttonsRow.topAnchor.constraint(equalTo: bottomBar.topAnchor, constant: 14),
-            buttonsRow.bottomAnchor.constraint(equalTo: bottomBar.safeAreaLayoutGuide.bottomAnchor, constant: -4),
-            buttonsRow.leadingAnchor.constraint(equalTo: bottomBar.leadingAnchor, constant: 16),
-            buttonsRow.trailingAnchor.constraint(equalTo: bottomBar.trailingAnchor, constant: -16),
-        ])
-
-        // Orden de capas: mapa primero (a pantalla completa, de fondo),
-        // tarjeta de cifras y barra inferior encima flotando — antes el
-        // mapa era un hermano más, encajado en el hueco que dejaban las
-        // otras dos franjas.
-        activeContainer.addSubview(activeMapWrapper)
-        activeContainer.addSubview(infoCard)
-        activeContainer.addSubview(bottomBar)
-        NSLayoutConstraint.activate([
-            activeMapWrapper.topAnchor.constraint(equalTo: activeContainer.topAnchor),
-            activeMapWrapper.leadingAnchor.constraint(equalTo: activeContainer.leadingAnchor),
-            activeMapWrapper.trailingAnchor.constraint(equalTo: activeContainer.trailingAnchor),
-            activeMapWrapper.bottomAnchor.constraint(equalTo: bottomBar.topAnchor),
-
-            infoCard.topAnchor.constraint(equalTo: activeContainer.safeAreaLayoutGuide.topAnchor, constant: 8),
-            infoCard.leadingAnchor.constraint(equalTo: activeContainer.leadingAnchor, constant: 12),
-            infoCard.trailingAnchor.constraint(equalTo: activeContainer.trailingAnchor, constant: -12),
-
-            bottomBar.leadingAnchor.constraint(equalTo: activeContainer.leadingAnchor),
-            bottomBar.trailingAnchor.constraint(equalTo: activeContainer.trailingAnchor),
-            bottomBar.bottomAnchor.constraint(equalTo: activeContainer.bottomAnchor),
-        ])
-    }
-
-    private func activeStatCard(valueLabel: UILabel, caption: String) -> UIView {
-        let container = UIView()
-        container.backgroundColor = AppTheme.cardBackground
-        container.layer.cornerRadius = 12
-        container.layer.borderWidth = 1
-        container.layer.borderColor = AppTheme.cardBorder.cgColor
-
-        valueLabel.font = AppFont.data(28)
-        valueLabel.textColor = AppTheme.text
-        valueLabel.text = "0"
-
-        let captionLabel = UILabel()
-        captionLabel.styleAsLabel(caption, size: 10, color: AppTheme.textSecondary(0.42), tracking: 1.2)
-
-        let stack = UIStackView(arrangedSubviews: [valueLabel, captionLabel])
-        stack.axis = .vertical
-        stack.spacing = 3
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
-            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10),
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 11),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor, constant: -6),
-        ])
-        return container
-    }
-
-    private func addPulseAnimation(to view: UIView) {
-        let animation = CABasicAnimation(keyPath: "opacity")
-        animation.fromValue = 1
-        animation.toValue = 0.25
-        animation.duration = 0.8
-        animation.autoreverses = true
-        animation.repeatCount = .infinity
-        view.layer.add(animation, forKey: "pulse")
-    }
-
     // MARK: - Pausa
 
-    private func updatePauseButton() {
-        pauseIcon.image = UIImage(systemName: isPaused ? "play.fill" : "pause.fill")
-        pauseLabelView.styleAsLabel(isPaused ? "Reanudar" : "Pausar", size: 15, color: AppTheme.text, tracking: 1.2)
+    func updatePauseButton() {
+        pauseIcon.image = UIImage(systemName: recordingSession.isPaused ? "play.fill" : "pause.fill")
+        pauseLabelView.styleAsLabel(
+            recordingSession.isPaused ? "Reanudar" : "Pausar", size: 15, color: AppTheme.text, tracking: 1.2)
     }
 
     private func updateRecordingStateLabel() {
-        if isPaused {
+        if recordingSession.isPaused {
             stateLabel.styleAsLabel(
                 "En pausa", size: 12.5, medium: true, color: AppTheme.textSecondary(0.6), tracking: 1.4)
             recDot.backgroundColor = AppTheme.textSecondary(0.4)
@@ -607,54 +128,18 @@ final class RegisterViewController: UIViewController {
         }
     }
 
-    @objc private func onPauseTapped() {
+    @objc func onPauseTapped() {
         guard isRecording else { return }
-        if isPaused {
-            if let pauseStartDate {
-                pausedDurationTotal += Date().timeIntervalSince(pauseStartDate)
-            }
-            pauseStartDate = nil
-            isPaused = false
-            // Abre un tramo nuevo — el siguiente punto grabado será el
-            // primero de ese tramo, sin conectar con una línea recta (ni
-            // sumar como distancia real) el hueco que deja la pausa.
-            trackSegments.append([])
+        if recordingSession.isPaused {
+            recordingSession.resume()
         } else {
-            isPaused = true
-            pauseStartDate = Date()
+            recordingSession.pause()
         }
         updatePauseButton()
         updateRecordingStateLabel()
     }
 
-    /// Tiempo de grabación real transcurrido — el reloj de pared menos
-    /// todo el rato que ha estado en pausa, incluida la pausa en curso si
-    /// la hay ahora mismo (así el cronómetro se queda congelado en vivo
-    /// mientras `isPaused`, no solo al mirar las cifras finales).
-    private func currentElapsed() -> TimeInterval {
-        guard let start = rideStartDate else { return 0 }
-        var elapsed = Date().timeIntervalSince(start) - pausedDurationTotal
-        if isPaused, let pauseStartDate {
-            elapsed -= Date().timeIntervalSince(pauseStartDate)
-        }
-        return max(0, elapsed)
-    }
-
-    // MARK: - Cambiar entre reposo/grabando
-
-    private func switchToIdle(animated: Bool) {
-        moveMapView(to: idleMapWrapper)
-        idleContainer.isHidden = false
-        activeContainer.isHidden = true
-    }
-
-    private func switchToActive() {
-        moveMapView(to: activeMapWrapper)
-        idleContainer.isHidden = true
-        activeContainer.isHidden = false
-    }
-
-    @objc private func onCloseTapped() {
+    @objc func onCloseTapped() {
         dismiss(animated: true)
     }
 
@@ -677,7 +162,7 @@ final class RegisterViewController: UIViewController {
         }
     }
 
-    @objc private func onChangeBikeTapped() {
+    @objc func onChangeBikeTapped() {
         guard !bikes.isEmpty else {
             showAlert(title: "Sin motos", message: "Añade una moto desde tu perfil antes de iniciar una ruta.")
             return
@@ -711,25 +196,40 @@ final class RegisterViewController: UIViewController {
     /// delegado, de forma asíncrona). Solo espera de verdad cuando pedirlo
     /// puede realmente mostrar un diálogo nuevo (`.notDetermined`, o
     /// `.authorizedWhenInUse` — desde ahí iOS sí ofrece "ampliar a
-    /// Siempre"); en cualquier otro estado ya decidido, `request*` no
-    /// dispara ningún delegado nuevo y esperar se quedaría colgado para
-    /// siempre.
+    /// Siempre").
+    ///
+    /// Ojo: desde `.authorizedWhenInUse`, iOS solo enseña el diálogo de
+    /// "ampliar a Siempre" LA PRIMERA VEZ que se pide en toda la vida de
+    /// la instalación. Si el usuario ya respondió una vez (eligiendo
+    /// "Mantener mientras se usa la app", sin subir a "Siempre"), cada
+    /// pulsación posterior de "Empezar ruta" volvía a llamar a
+    /// `requestAlwaysAuthorization()` sin que iOS enseñe ningún diálogo
+    /// ni llame al delegado — la `continuation` se quedaba colgada para
+    /// siempre y la pantalla parecía congelada. El timeout de abajo
+    /// resuelve con el estado actual si el delegado no contesta a
+    /// tiempo, cubriendo tanto este caso como cualquier otro en el que
+    /// iOS decida no llamarlo.
     private func requestAlwaysAuthorization() async -> CLAuthorizationStatus {
         let current = locationManager.authorizationStatus
         guard current == .notDetermined || current == .authorizedWhenInUse else { return current }
         return await withCheckedContinuation { continuation in
             authorizationContinuation = continuation
             locationManager.requestAlwaysAuthorization()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                guard let self, let pending = self.authorizationContinuation else { return }
+                self.authorizationContinuation = nil
+                pending.resume(returning: self.locationManager.authorizationStatus)
+            }
         }
     }
 
     // MARK: - Grabar ruta
 
-    @objc private func onStartTapped() {
+    @objc func onStartTapped() {
         Task { await startRideFlow() }
     }
 
-    @objc private func onFinishTapped() {
+    @objc func onFinishTapped() {
         Task { await finishRide() }
     }
 
@@ -744,35 +244,23 @@ final class RegisterViewController: UIViewController {
         guard let bike else { return }
         selectedBike = bike
 
-        // Pide "siempre" antes de arrancar y ESPERA la respuesta real del
-        // diálogo (antes se pedía y se seguía sin más — si el sistema mata
-        // las actualizaciones de posición en cuanto la app pasa a segundo
-        // plano, la grabación se corta a medias sin que nadie se entere
-        // hasta volver y ver el trazado incompleto). Si sigue sin ser
-        // "Siempre" tras preguntarle, se avisa antes de empezar, no
-        // después de descubrirlo a medias.
+        // Se sigue pidiendo "siempre" (si ya la tiene concedida, esto no
+        // enseña ningún diálogo) para aprovechar grabación en segundo
+        // plano cuando esté disponible, pero ya no bloquea ni avisa si
+        // falta — se empieza a grabar igual con lo que haya. Sin
+        // "Siempre", iOS puede pausar las actualizaciones al bloquear el
+        // móvil (el trazado puede salir con huecos), pero es la decisión
+        // que se ha pedido: no interrumpir con el aviso.
         let authorization = await requestAlwaysAuthorization()
-        guard authorization == .authorizedAlways else {
-            showAlert(
-                title: "Falta un permiso",
-                message: "Grabar en segundo plano necesita el permiso de ubicación \"Siempre\" — actívalo en "
-                    + "Ajustes del sistema antes de empezar. Si no, la grabación puede cortarse al bloquear el móvil.")
-            return
+        if authorization == .authorizedAlways {
+            locationManager.allowsBackgroundLocationUpdates = true
+            locationManager.pausesLocationUpdatesAutomatically = false
         }
-        locationManager.allowsBackgroundLocationUpdates = true
-        locationManager.pausesLocationUpdatesAutomatically = false
 
         do {
             let ride = try await rideRepository.startRide(riderId: userId, motorbikeId: bike.id)
             currentRide = ride
-            trackSegments = [[]]
-            totalDistanceMeters = 0
-            totalElevationGainMeters = 0
-            lastAltitude = nil
-            isPaused = false
-            pauseStartDate = nil
-            pausedDurationTotal = 0
-            rideStartDate = Date()
+            recordingSession.start()
             UserDefaults.standard.set(ride.id, forKey: Self.pendingRideIdKey)
             activeBikeLabel.styleAsLabel(bike.displayName, size: 12.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.9)
             updateRecordingStateLabel()
@@ -845,36 +333,16 @@ final class RegisterViewController: UIViewController {
         // se vean con un hueco al final por algo que en realidad está a
         // salvo en el propio móvil.
         let backendPoints = ride.trackPoints.map {
-            StatsPoint(coordinate: $0.coordinate, altitude: $0.altitude, isSegmentStart: $0.isSegmentStart, timestamp: $0.timestamp)
+            RideRecordingSession.RestorePoint(
+                coordinate: $0.coordinate, altitude: $0.altitude, isSegmentStart: $0.isSegmentStart, timestamp: $0.timestamp)
         }
         let pendingPoints = trackSyncManager.pendingPoints(forRide: ride.id).map {
-            StatsPoint(coordinate: $0.coordinate, altitude: $0.altitude, isSegmentStart: $0.isSegmentStart, timestamp: $0.timestamp)
+            RideRecordingSession.RestorePoint(
+                coordinate: $0.coordinate, altitude: $0.altitude, isSegmentStart: $0.isSegmentStart, timestamp: $0.timestamp)
         }
-        let recoveredSegments = Self.groupIntoSegments(backendPoints + pendingPoints)
 
         currentRide = ride
-        // Un tramo nuevo, vacío, siempre al final: da igual si la app se
-        // cerró en pausa o sin más — hay un hueco real de tiempo (y
-        // posiblemente de distancia) entre el último punto grabado y
-        // ahora mismo, que no debe conectarse con una línea recta ni
-        // sumarse como si se hubiera recorrido. Mismo mecanismo que
-        // "Reanudar" tras una pausa en caliente.
-        trackSegments = recoveredSegments.map { $0.map(\.coordinate) } + [[]]
-        rideStartDate = ride.startedAt
-        isPaused = false
-        pauseStartDate = nil
-        (totalDistanceMeters, totalElevationGainMeters) = Self.recomputeStats(from: recoveredSegments)
-        lastAltitude = nil
-        // El tiempo ya transcurrido de pared que no está cubierto por
-        // ningún tramo grabado (pausas reales + el rato que la app pudo
-        // haber estado cerrada) se cuenta como "pausado" a efectos del
-        // cronómetro — mismo criterio que usa el backend para la duración
-        // de la ruta publicada.
-        let activeSoFar = recoveredSegments.reduce(0.0) { total, segment in
-            guard let first = segment.first?.timestamp, let last = segment.last?.timestamp else { return total }
-            return total + max(0, last.timeIntervalSince(first))
-        }
-        pausedDurationTotal = max(0, Date().timeIntervalSince(ride.startedAt) - activeSoFar)
+        recordingSession.restore(from: backendPoints + pendingPoints, rideStartDate: ride.startedAt)
 
         updateRecordingStateLabel()
         updatePauseButton()
@@ -883,59 +351,6 @@ final class RegisterViewController: UIViewController {
         startTimer()
         liveActivity.start(motorbikeName: selectedBike?.displayName ?? "")
         trackSyncManager.attemptDrain(rideId: ride.id)
-    }
-
-    /// Punto mínimo común entre `TrackPointModel` (lo que ya sabe el
-    /// backend) y `PendingTrackPoint` (lo que sigue en cola local) — para
-    /// poder recalcular cifras sobre los dos juntos al reanudar una
-    /// grabación a medias.
-    private struct StatsPoint {
-        let coordinate: CLLocationCoordinate2D
-        let altitude: Double?
-        let isSegmentStart: Bool
-        let timestamp: Date
-    }
-
-    /// Trocea una lista plana y ordenada en tramos — un corte nuevo cada
-    /// vez que `isSegmentStart` es `true` (salvo el primer punto, que no
-    /// cuenta como corte: ya es el arranque del primer tramo). Mismo
-    /// criterio que `split_into_segments` en el backend (`app/shared/geo.py`).
-    private static func groupIntoSegments(_ points: [StatsPoint]) -> [[StatsPoint]] {
-        var segments: [[StatsPoint]] = []
-        for (index, point) in points.enumerated() {
-            if index == 0 || point.isSegmentStart {
-                segments.append([])
-            }
-            segments[segments.count - 1].append(point)
-        }
-        return segments
-    }
-
-    /// Mismas reglas que al ir sumando en vivo (`didUpdateLocations`), pero
-    /// aplicadas de una vez sobre un historial ya grabado, tramo a tramo —
-    /// nunca se suma distancia/desnivel entre el último punto de un tramo
-    /// y el primero del siguiente (el hueco de una pausa).
-    private static func recomputeStats(from segments: [[StatsPoint]]) -> (distance: CLLocationDistance, elevationGain: Double) {
-        var distance: CLLocationDistance = 0
-        var elevationGain: Double = 0
-        for segment in segments {
-            var lastAltitude: Double?
-            for (index, point) in segment.enumerated() {
-                if index > 0 {
-                    let previous = segment[index - 1]
-                    distance += CLLocation(latitude: previous.coordinate.latitude, longitude: previous.coordinate.longitude)
-                        .distance(from: CLLocation(latitude: point.coordinate.latitude, longitude: point.coordinate.longitude))
-                }
-                if let altitude = point.altitude {
-                    if let last = lastAltitude {
-                        let delta = altitude - last
-                        if delta > 1 { elevationGain += delta }
-                    }
-                    lastAltitude = altitude
-                }
-            }
-        }
-        return (distance, elevationGain)
     }
 
     /// Por debajo de este número de puntos, el ride se descarta en vez de
@@ -959,17 +374,15 @@ final class RegisterViewController: UIViewController {
             // `ride.track_points` en el backend, que en este mismo
             // instante todavía podría no tener los últimos puntos si no
             // ha habido cobertura hasta ahora mismo.
-            let pointCount = trackSegments.reduce(0) { $0 + $1.count }
-            let publishSegments = trackSegments
-            let distanceKm = (totalDistanceMeters / 1000 * 100).rounded() / 100
+            let pointCount = recordingSession.pointCount
+            let publishSegments = recordingSession.trackSegments
+            let distanceKm = (recordingSession.totalDistanceMeters / 1000 * 100).rounded() / 100
             // `currentElapsed()`, no el reloj de pared en crudo: si se
             // termina la ruta estando pausada (o hubo alguna pausa antes),
             // ese rato no debe contarse como duración recorrida.
-            let durationMinutes = max(1, Int(currentElapsed() / 60))
+            let durationMinutes = max(1, Int(recordingSession.currentElapsed() / 60))
             currentRide = nil
             UserDefaults.standard.removeObject(forKey: Self.pendingRideIdKey)
-            isPaused = false
-            pauseStartDate = nil
             stopTimer()
             liveActivity.end()
             switchToIdle(animated: true)
@@ -1023,7 +436,7 @@ final class RegisterViewController: UIViewController {
     /// hueco de una pausa no sale dibujado como si fuera carretera
     /// recorrida.
     private func redrawTrack() {
-        polylineManager?.annotations = trackSegments.filter { $0.count >= 2 }.map { segment in
+        polylineManager?.annotations = recordingSession.trackSegments.filter { $0.count >= 2 }.map { segment in
             var polyline = PolylineAnnotation(lineCoordinates: segment)
             polyline.lineColor = StyleColor(AppTheme.primary)
             polyline.lineWidth = 7
@@ -1043,18 +456,18 @@ final class RegisterViewController: UIViewController {
     }
 
     private func updateActiveStats() {
-        guard rideStartDate != nil else { return }
+        guard recordingSession.rideStartDate != nil else { return }
         // `currentElapsed()`, no el reloj de pared: mientras `isPaused`
         // se queda congelado en vez de seguir sumando, y al terminar una
         // pausa no arrastra ese rato ni en el cronómetro ni en la
         // velocidad media.
-        let elapsed = currentElapsed()
+        let elapsed = recordingSession.currentElapsed()
         let elapsedSeconds = Int(elapsed)
         timeLabel.text = String(format: "%02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60)
 
-        let km = totalDistanceMeters / 1000
+        let km = recordingSession.totalDistanceMeters / 1000
         kmValueLabel.text = String(format: "%.1f", km)
-        elevationValueLabel.text = String(format: "%.0f", totalElevationGainMeters)
+        elevationValueLabel.text = String(format: "%.0f", recordingSession.totalElevationGainMeters)
         let hours = elapsed / 3600
         let speedKmh = hours > 0 ? km / hours : 0
         speedValueLabel.text = String(format: "%.0f", speedKmh)
@@ -1076,11 +489,6 @@ final class RegisterViewController: UIViewController {
         }
     }
 
-    private func showAlert(title: String, message: String) {
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
-    }
 }
 
 // MARK: - CLLocationManagerDelegate
@@ -1105,31 +513,11 @@ extension RegisterViewController: CLLocationManagerDelegate {
         }
 
         guard isRecording, let ride = currentRide else { return }
-        // En pausa no se toca el trazado, ni las cifras, ni la cola de
-        // sync — solo el chip de GPS y la cámara de arriba, que siguen
-        // igual que en reposo. Ver `onPauseTapped`.
-        guard !isPaused else { return }
-
-        // ¿Primer punto de un tramo nuevo? (el arranque de la ruta, o
-        // justo tras un "Reanudar"). Si lo es, no hay un "punto anterior"
-        // real dentro de este tramo con el que comparar — ni distancia ni
-        // desnivel se calculan contra el último punto de ANTES de la
-        // pausa, para no contar como recorrido el salto que deja el hueco.
-        let isNewSegment = trackSegments[trackSegments.count - 1].isEmpty
-        if !isNewSegment, let previous = trackSegments[trackSegments.count - 1].last {
-            totalDistanceMeters += CLLocation(latitude: previous.latitude, longitude: previous.longitude)
-                .distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
-        }
-        if isNewSegment {
-            lastAltitude = location.altitude
-        } else if location.altitude != 0 || lastAltitude != nil {
-            if let previousAltitude = lastAltitude {
-                let delta = location.altitude - previousAltitude
-                if delta > 1 { totalElevationGainMeters += delta }
-            }
-            lastAltitude = location.altitude
-        }
-        trackSegments[trackSegments.count - 1].append(coordinate)
+        // `record(...)` devuelve `nil` sin tocar nada si está pausado —
+        // ni trazado, ni cifras, ni cola de sync (solo el chip de GPS y
+        // la cámara de arriba siguen igual que en reposo). Ver
+        // `RideRecordingSession.record(coordinate:altitude:)`.
+        guard let result = recordingSession.record(coordinate: coordinate, altitude: location.altitude) else { return }
         redrawTrack()
 
         // Antes se mandaba directo a la red con un `try?` que se tragaba
@@ -1143,7 +531,7 @@ extension RegisterViewController: CLLocationManagerDelegate {
         trackSyncManager.enqueue(rideId: ride.id, point: PendingTrackPoint(
             latitude: coordinate.latitude, longitude: coordinate.longitude,
             altitude: location.altitude, speed: location.speed >= 0 ? location.speed * 3.6 : nil,
-            timestamp: location.timestamp, isSegmentStart: isNewSegment))
+            timestamp: location.timestamp, isSegmentStart: result.isSegmentStart))
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

@@ -18,6 +18,7 @@ from app.riders.infrastructure.sql_follow_repository import SqlAlchemyFollowRepo
 from app.routes.infrastructure.sql_route_repository import SqlAlchemyRouteRepository
 from app.shared.auth_dependency import get_current_user
 from app.shared.database import get_db
+from app.shared.errors import NotFoundError
 from app.users.domain.user import User
 from app.users.infrastructure.sql_user_repository import SqlAlchemyUserRepository
 from app.users.infrastructure.user_model import UserModel
@@ -69,6 +70,8 @@ def follow_rider(
 ):
     try:
         service.follow(current_user.id, user_id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -92,7 +95,7 @@ def accept_request(
         service.accept(request_id, current_user.id)
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
@@ -106,7 +109,7 @@ def reject_request(
         service.reject(request_id, current_user.id)
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
@@ -173,7 +176,7 @@ def get_rider_profile(
 ):
     try:
         profile = service.get_rider_profile(user_id, current_user.id)
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
     return RiderProfileResponse(

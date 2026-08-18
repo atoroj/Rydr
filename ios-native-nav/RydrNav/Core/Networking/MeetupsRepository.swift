@@ -31,23 +31,33 @@ struct MeetupsRepository {
     func create(
         title: String, description: String?, locationName: String?,
         coordinate: CLLocationCoordinate2D, scheduledAt: Date,
-        maxParticipants: Int?, isPrivate: Bool
+        maxParticipants: Int?, isPrivate: Bool,
+        locationHidden: Bool = false, approximateArea: String? = nil
     ) async throws -> Meetup {
         try await client.request(.post, APIConstants.meetups, body: body(
             title: title, description: description, locationName: locationName,
             coordinate: coordinate, scheduledAt: scheduledAt,
-            maxParticipants: maxParticipants, isPrivate: isPrivate))
+            maxParticipants: maxParticipants, isPrivate: isPrivate,
+            locationHidden: locationHidden, approximateArea: approximateArea))
     }
 
     func update(
         id: Int, title: String, description: String?, locationName: String?,
         coordinate: CLLocationCoordinate2D, scheduledAt: Date,
-        maxParticipants: Int?, isPrivate: Bool
+        maxParticipants: Int?, isPrivate: Bool,
+        locationHidden: Bool = false, approximateArea: String? = nil
     ) async throws -> Meetup {
         try await client.request(.patch, "\(APIConstants.meetups)/\(id)", body: body(
             title: title, description: description, locationName: locationName,
             coordinate: coordinate, scheduledAt: scheduledAt,
-            maxParticipants: maxParticipants, isPrivate: isPrivate))
+            maxParticipants: maxParticipants, isPrivate: isPrivate,
+            locationHidden: locationHidden, approximateArea: approximateArea))
+    }
+
+    /// Solo el organizador puede llamarlo — ver `MeetupService.reveal_location`.
+    /// No hay vuelta atrás: una vez revelada, no se vuelve a ocultar.
+    func revealLocation(id: Int) async throws {
+        try await client.requestVoid(.post, "\(APIConstants.meetups)/\(id)/reveal-location")
     }
 
     func delete(id: Int) async throws {
@@ -79,7 +89,8 @@ struct MeetupsRepository {
     private func body(
         title: String, description: String?, locationName: String?,
         coordinate: CLLocationCoordinate2D, scheduledAt: Date,
-        maxParticipants: Int?, isPrivate: Bool
+        maxParticipants: Int?, isPrivate: Bool,
+        locationHidden: Bool, approximateArea: String?
     ) -> [String: Any] {
         var body: [String: Any] = [
             "title": title,
@@ -87,10 +98,12 @@ struct MeetupsRepository {
             "location_lng": coordinate.longitude,
             "scheduled_at": isoFormatter.string(from: scheduledAt),
             "is_private": isPrivate,
+            "location_hidden": locationHidden,
         ]
         if let description, !description.isEmpty { body["description"] = description }
         if let locationName, !locationName.isEmpty { body["location_name"] = locationName }
         if let maxParticipants { body["max_participants"] = maxParticipants }
+        if let approximateArea, !approximateArea.isEmpty { body["approximate_area"] = approximateArea }
         return body
     }
 }

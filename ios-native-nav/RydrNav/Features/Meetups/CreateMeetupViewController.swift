@@ -30,6 +30,8 @@ final class CreateMeetupViewController: UIViewController {
     private let publicButton = UIButton(type: .system)
     private let privateButton = UIButton(type: .system)
     private var isPrivate = false
+    private let hideLocationToggle = UISwitch()
+    private let approximateAreaField = UITextField()
     private let deleteButton = UIButton(type: .system)
     private let saveButton = UIButton(type: .system)
     private let statusLabel = UILabel()
@@ -118,6 +120,16 @@ final class CreateMeetupViewController: UIViewController {
         visibilityRow.spacing = 10
         visibilityRow.distribution = .fillEqually
 
+        let hideLocationRow = buildHideLocationRow()
+
+        approximateAreaField.attributedPlaceholder = NSAttributedString(
+            string: "Zona aproximada (p. ej. \"Sierra de Guadarrama\")",
+            attributes: [.foregroundColor: AppTheme.textSecondary(0.4)])
+        stylePillField(approximateAreaField, amberBorder: false)
+        approximateAreaField.font = AppFont.body(14.5)
+        approximateAreaField.textColor = AppTheme.text
+        approximateAreaField.isHidden = true
+
         deleteButton.setTitle("Eliminar quedada", for: .normal)
         deleteButton.titleLabel?.font = AppFont.body(15, .semibold)
         deleteButton.setTitleColor(.systemRed, for: .normal)
@@ -139,7 +151,8 @@ final class CreateMeetupViewController: UIViewController {
 
         let stack = UIStackView(arrangedSubviews: [
             titleField, descriptionView, mapContainer, locationNameField,
-            cardsRow, visibilityRow, saveButton, statusLabel, deleteButton,
+            cardsRow, visibilityRow, hideLocationRow, approximateAreaField,
+            saveButton, statusLabel, deleteButton,
         ])
         stack.axis = .vertical
         stack.spacing = 12
@@ -263,6 +276,43 @@ final class CreateMeetupViewController: UIViewController {
     @objc private func onPickPublic() { isPrivate = false; updateVisibilityButtons() }
     @objc private func onPickPrivate() { isPrivate = true; updateVisibilityButtons() }
 
+    /// Distinto de "Solo mis riders" (`isPrivate`, arriba): eso controla
+    /// quién ve que la quedada EXISTE; esto controla quién ve el PUNTO
+    /// EXACTO — pensado para anunciarla a todo el mundo (p. ej. un
+    /// youtuber a su audiencia) pero que solo aparezca quien de verdad se
+    /// apunte. Mientras esté oculta, se enseña la "zona aproximada" en su
+    /// lugar — ver `MeetupDetailViewController`.
+    private func buildHideLocationRow() -> UIView {
+        let label = UILabel()
+        label.text = "Ubicación privada — solo apuntados, cuando yo la revele"
+        label.font = AppFont.body(14.5, .semibold)
+        label.textColor = AppTheme.text
+        label.numberOfLines = 0
+        // Sin esto, con el texto largo (a diferencia del resto de switches
+        // de la app, más cortos) el label y el switch empatan en
+        // prioridad de compresión — el layout puede comprimir el switch a
+        // un ancho casi nulo: se sigue viendo pero el área táctil real
+        // desaparece, así que no responde al toque. El label cede (que
+        // envuelva a más líneas), el switch nunca se encoge.
+        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        hideLocationToggle.onTintColor = AppTheme.accentTeal
+        hideLocationToggle.setContentHuggingPriority(.required, for: .horizontal)
+        hideLocationToggle.setContentCompressionResistancePriority(.required, for: .horizontal)
+        hideLocationToggle.addTarget(self, action: #selector(onHideLocationToggled), for: .valueChanged)
+
+        let row = UIStackView(arrangedSubviews: [label, hideLocationToggle])
+        row.axis = .horizontal
+        row.alignment = .center
+        row.spacing = 8
+        return row
+    }
+
+    @objc private func onHideLocationToggled() {
+        approximateAreaField.isHidden = !hideLocationToggle.isOn
+    }
+
     @objc private func onLocationNameChanged() {
         let text = locationNameField.text?.trimmingCharacters(in: .whitespaces) ?? ""
         locationOverlayLabel.styleAsLabel(
@@ -283,9 +333,16 @@ final class CreateMeetupViewController: UIViewController {
         maxParticipantsField.text = meetup.maxParticipants.map(String.init)
         isPrivate = meetup.isPrivate
         updateVisibilityButtons()
-        selectedCoordinate = meetup.coordinate
-        placeMarker(at: meetup.coordinate)
-        mapView.mapboxMap.setCamera(to: CameraOptions(center: meetup.coordinate, zoom: 12))
+        hideLocationToggle.setOn(meetup.locationHidden, animated: false)
+        approximateAreaField.isHidden = !meetup.locationHidden
+        approximateAreaField.text = meetup.approximateArea
+        // El organizador siempre recibe el punto exacto del backend (ver
+        // `MeetupService._to_view`), esté oculta para el resto o no — así
+        // que al editar siempre hay una coordenada real que precargar.
+        guard let coordinate = meetup.coordinate else { return }
+        selectedCoordinate = coordinate
+        placeMarker(at: coordinate)
+        mapView.mapboxMap.setCamera(to: CameraOptions(center: coordinate, zoom: 12))
     }
 
     private func centerOnCurrentLocation() {
@@ -328,7 +385,7 @@ final class CreateMeetupViewController: UIViewController {
                     self.onSaved()
                     self.dismiss(animated: true)
                 } catch {
-                    self.showError("No se pudo eliminar: \(error.localizedDescription)")
+                    self.showAlert(message: "No se pudo eliminar: \(error.localizedDescription)")
                 }
             }
         })
@@ -337,17 +394,19 @@ final class CreateMeetupViewController: UIViewController {
 
     @objc private func onSave() {
         guard let title = titleField.text, !title.trimmingCharacters(in: .whitespaces).isEmpty else {
-            showError("Ponle un título a la quedada.")
+            showAlert(message: "Ponle un título a la quedada.")
             return
         }
         guard let coordinate = selectedCoordinate else {
-            showError("Marca el punto de encuentro tocando el mapa.")
+            showAlert(message: "Marca el punto de encuentro tocando el mapa.")
             return
         }
 
         let description = descriptionView.textColor == AppTheme.textSecondary(0.4) ? nil : descriptionView.text
         let locationName = locationNameField.text?.trimmingCharacters(in: .whitespaces)
         let maxParticipants = maxParticipantsField.text.flatMap { Int($0) }
+        let locationHidden = hideLocationToggle.isOn
+        let approximateArea = approximateAreaField.text?.trimmingCharacters(in: .whitespaces)
         saveButton.isEnabled = false
 
         Task {
@@ -357,28 +416,25 @@ final class CreateMeetupViewController: UIViewController {
                         id: meetup.id, title: title, description: description,
                         locationName: locationName?.isEmpty == true ? nil : locationName,
                         coordinate: coordinate, scheduledAt: datePicker.date,
-                        maxParticipants: maxParticipants, isPrivate: isPrivate)
+                        maxParticipants: maxParticipants, isPrivate: isPrivate,
+                        locationHidden: locationHidden, approximateArea: approximateArea)
                 } else {
                     _ = try await repository.create(
                         title: title, description: description,
                         locationName: locationName?.isEmpty == true ? nil : locationName,
                         coordinate: coordinate, scheduledAt: datePicker.date,
-                        maxParticipants: maxParticipants, isPrivate: isPrivate)
+                        maxParticipants: maxParticipants, isPrivate: isPrivate,
+                        locationHidden: locationHidden, approximateArea: approximateArea)
                 }
                 onSaved()
                 dismiss(animated: true)
             } catch {
                 saveButton.isEnabled = true
-                showError("No se pudo guardar: \(error.localizedDescription)")
+                showAlert(message: "No se pudo guardar: \(error.localizedDescription)")
             }
         }
     }
 
-    private func showError(_ message: String) {
-        let alert = UIAlertController(title: "Vaya", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
-    }
 }
 
 extension CreateMeetupViewController: UITextViewDelegate {

@@ -18,6 +18,8 @@ class SqlAlchemyMeetupRepository(MeetupRepository):
             location_name=m.location_name, location_lat=m.location_lat, location_lng=m.location_lng,
             scheduled_at=m.scheduled_at, max_participants=m.max_participants,
             is_private=bool(m.is_private), created_at=m.created_at,
+            location_hidden=bool(m.location_hidden), approximate_area=m.approximate_area,
+            location_revealed=bool(m.location_revealed),
         )
 
     def save(self, meetup: Meetup) -> Meetup:
@@ -26,7 +28,8 @@ class SqlAlchemyMeetupRepository(MeetupRepository):
             location_name=meetup.location_name, location_lat=meetup.location_lat,
             location_lng=meetup.location_lng, scheduled_at=meetup.scheduled_at,
             max_participants=meetup.max_participants, is_private=meetup.is_private,
-            created_at=meetup.created_at,
+            created_at=meetup.created_at, location_hidden=meetup.location_hidden,
+            approximate_area=meetup.approximate_area, location_revealed=meetup.location_revealed,
         )
         self.db.add(m)
         self.db.commit()

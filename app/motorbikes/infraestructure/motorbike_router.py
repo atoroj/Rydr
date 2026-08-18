@@ -7,6 +7,7 @@ from app.motorbikes.application.motorbike_service import MotorbikeService
 from app.motorbikes.infraestructure.sql_motorbike_repository import SqlAlchemyMotorbikeRepository
 from app.shared.auth_dependency import get_current_user
 from app.shared.database import get_db
+from app.shared.errors import NotFoundError
 from app.users.infrastructure.user_model import UserModel
 
 router = APIRouter(prefix="/motorbikes", tags=["motorbikes"])
@@ -36,7 +37,7 @@ def set_current_motorbike(
 ):
     try:
         return service.set_current(user_id=current_user.id, motorbike_id=motorbike_id)
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 @router.patch("/{motorbike_id}", response_model=MotorbikeResponse)
@@ -52,7 +53,7 @@ def update_motorbike(
             type=request.type, brand=request.brand, model=request.model,
             cc=request.cc, alias=request.alias, photo_url=request.photo_url, year=request.year,
         )
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 @router.delete("/{motorbike_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -63,7 +64,7 @@ def delete_motorbike(
 ):
     try:
         service.delete_motorbike(motorbike_id=motorbike_id, user_id=current_user.id)
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 @router.get("", response_model=List[MotorbikeResponse])

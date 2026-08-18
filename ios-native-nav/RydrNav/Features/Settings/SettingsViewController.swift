@@ -229,7 +229,7 @@ extension SettingsViewController: PHPickerViewControllerDelegate {
                 DispatchQueue.main.async {
                     self.avatarSpinner.stopAnimating()
                     self.avatarButton.isEnabled = true
-                    self.showError("No se pudo leer la foto elegida\(error.map { ": \($0.localizedDescription)" } ?? ".")")
+                    self.showAlert(message: "No se pudo leer la foto elegida\(error.map { ": \($0.localizedDescription)" } ?? ".")")
                 }
                 return
             }
@@ -250,16 +250,11 @@ extension SettingsViewController: PHPickerViewControllerDelegate {
                     await MainActor.run {
                         self.avatarSpinner.stopAnimating()
                         self.avatarButton.isEnabled = true
-                        self.showError("No se pudo actualizar la foto de perfil: \(error.localizedDescription)")
+                        self.showAlert(message: "No se pudo actualizar la foto de perfil: \(error.localizedDescription)")
                     }
                 }
             }
         }
     }
 
-    private func showError(_ message: String) {
-        let alert = UIAlertController(title: "Vaya", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
-    }
 }

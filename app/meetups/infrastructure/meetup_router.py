@@ -17,6 +17,7 @@ from app.meetups.infrastructure.sql_meetup_repository import SqlAlchemyMeetupRep
 from app.riders.infrastructure.sql_follow_repository import SqlAlchemyFollowRepository
 from app.shared.auth_dependency import get_current_user
 from app.shared.database import get_db
+from app.shared.errors import NotFoundError
 from app.users.infrastructure.sql_user_repository import SqlAlchemyUserRepository
 from app.users.infrastructure.user_model import UserModel
 
@@ -32,17 +33,24 @@ def get_service(db: Session = Depends(get_db)) -> MeetupService:
 
 
 def _to_response(view: MeetupView) -> MeetupResponse:
+    m = view.meetup
     return MeetupResponse(
-        id=view.meetup.id,
+        id=m.id,
         organizer=MeetupOrganizerResponse(
             id=view.organizer.id, username=view.organizer.username, avatar_url=view.organizer.avatar_url,
         ),
-        title=view.meetup.title, description=view.meetup.description,
-        location_name=view.meetup.location_name, location_lat=view.meetup.location_lat,
-        location_lng=view.meetup.location_lng, scheduled_at=view.meetup.scheduled_at,
-        max_participants=view.meetup.max_participants, participant_count=view.participant_count,
-        is_private=view.meetup.is_private, is_joined=view.is_joined, is_organizer=view.is_organizer,
-        created_at=view.meetup.created_at,
+        title=m.title, description=m.description,
+        # Nunca se manda el punto exacto a quien no debe verlo — ver
+        # `MeetupService._to_view`.
+        location_name=m.location_name if view.location_visible else None,
+        location_lat=m.location_lat if view.location_visible else None,
+        location_lng=m.location_lng if view.location_visible else None,
+        approximate_area=m.approximate_area,
+        location_hidden=m.location_hidden, location_revealed=m.location_revealed,
+        scheduled_at=m.scheduled_at,
+        max_participants=m.max_participants, participant_count=view.participant_count,
+        is_private=m.is_private, is_joined=view.is_joined, is_organizer=view.is_organizer,
+        created_at=m.created_at,
     )
 
 
@@ -57,6 +65,7 @@ def create_meetup(
         location_name=request.location_name, location_lat=request.location_lat,
         location_lng=request.location_lng, scheduled_at=request.scheduled_at,
         max_participants=request.max_participants, is_private=request.is_private,
+        location_hidden=request.location_hidden, approximate_area=request.approximate_area,
     )
     return _to_response(service.get_view(meetup.id, current_user.id))
 
@@ -90,7 +99,7 @@ def get_meetup(
 ):
     try:
         return _to_response(service.get_view(meetup_id, current_user.id))
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
@@ -130,6 +139,8 @@ def join_meetup(
 ):
     try:
         service.join(meetup_id, current_user.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except PermissionError as e:
@@ -144,8 +155,24 @@ def leave_meetup(
 ):
     try:
         service.leave(meetup_id, current_user.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/{meetup_id}/reveal-location", status_code=status.HTTP_204_NO_CONTENT)
+def reveal_location(
+    meetup_id: int,
+    service: MeetupService = Depends(get_service),
+    current_user: UserModel = Depends(get_current_user),
+):
+    try:
+        service.reveal_location(meetup_id, current_user.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.get("/{meetup_id}/participants", response_model=List[ParticipantResponse])
@@ -181,7 +208,7 @@ def list_live_locations(
 ):
     try:
         views = service.list_live_locations(meetup_id, current_user.id)
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except PermissionError as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))

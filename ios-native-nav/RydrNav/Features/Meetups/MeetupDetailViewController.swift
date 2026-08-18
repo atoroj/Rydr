@@ -18,6 +18,18 @@ final class MeetupDetailViewController: UIViewController {
     private let actionButton = UIButton(type: .system)
     private let statusLabel = UILabel()
 
+    // Tarjeta que sustituye al mapa mientras la ubicación exacta está
+    // oculta para quien mira (`Meetup.coordinate == nil` — nunca pasa
+    // para el organizador, que siempre recibe el punto real del backend).
+    private let hiddenLocationCard = UIView()
+    private let hiddenLocationLabel = UILabel()
+    // Fila aparte, solo para el organizador: recordatorio + acción de
+    // revelar — vive junto al mapa (que él sí ve bien), no dentro de
+    // `hiddenLocationCard`.
+    private let revealLocationRow = UIStackView()
+    private let revealLocationLabel = UILabel()
+    private let revealLocationButton = UIButton(type: .system)
+
     // Ubicación en vivo — solo si la quedada es hoy. Compartir la propia y
     // ver la de los demás son cosas independientes: se puede ver el mapa en
     // vivo sin compartir la tuya.
@@ -54,6 +66,7 @@ final class MeetupDetailViewController: UIViewController {
                 title: "Editar", style: .plain, target: self, action: #selector(onEditTapped))
         }
         setupUI()
+        updateLocationDisplay()
         Task { await loadParticipants() }
     }
 
@@ -94,6 +107,9 @@ final class MeetupDetailViewController: UIViewController {
         mapView.heightAnchor.constraint(equalToConstant: 190).isActive = true
         drawPin()
 
+        let hiddenCard = buildHiddenLocationCard()
+        let revealRow = buildRevealLocationRow()
+
         let badge = UILabel()
         badge.styleAsLabel(
             meetup.isPrivate ? " Privada · solo riders del organizador " : " Pública · abierta a todos ",
@@ -117,7 +133,9 @@ final class MeetupDetailViewController: UIViewController {
         dateLabel.textColor = AppTheme.textSecondary(0.6)
 
         let locationLabel = UILabel()
-        locationLabel.text = meetup.locationName ?? "Punto de encuentro marcado en el mapa"
+        locationLabel.text = meetup.coordinate != nil
+            ? (meetup.locationName ?? "Punto de encuentro marcado en el mapa")
+            : "Zona: \(meetup.approximateArea ?? "por confirmar")"
         locationLabel.font = AppFont.body(15)
         locationLabel.textColor = AppTheme.textSecondary(0.6)
         locationLabel.numberOfLines = 0
@@ -152,7 +170,7 @@ final class MeetupDetailViewController: UIViewController {
         statusLabel.numberOfLines = 0
 
         let stack = UIStackView(arrangedSubviews: [
-            mapView, badgeRow, organizerLabel, dateLabel, locationLabel, descriptionLabel,
+            mapView, hiddenCard, revealRow, badgeRow, organizerLabel, dateLabel, locationLabel, descriptionLabel,
             shareLocationRow, participantsTitle, participantsStack, actionButton, statusLabel,
         ])
         stack.axis = .vertical
@@ -171,14 +189,134 @@ final class MeetupDetailViewController: UIViewController {
         ])
     }
 
+    /// No-op si `meetup.coordinate` es `nil` — ubicación oculta para quien
+    /// mira; `updateLocationDisplay()` se encarga de mostrar
+    /// `hiddenLocationCard` en su lugar y deja `mapView` oculto.
     private func drawPin() {
+        guard let coordinate = meetup.coordinate else { return }
         let manager = mapView.annotations.makePointAnnotationManager()
         let symbol = UIImage(systemName: "mappin.circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 32))!
         let markerImage = symbol.withTintColor(AppTheme.primary, renderingMode: .alwaysOriginal)
-        var annotation = PointAnnotation(coordinate: meetup.coordinate)
+        var annotation = PointAnnotation(coordinate: coordinate)
         annotation.image = .init(image: markerImage, name: "meetup-pin")
         manager.annotations = [annotation]
-        mapView.mapboxMap.setCamera(to: CameraOptions(center: meetup.coordinate, zoom: 12))
+        mapView.mapboxMap.setCamera(to: CameraOptions(center: coordinate, zoom: 12))
+    }
+
+    // MARK: - Ubicación oculta
+
+    private func buildHiddenLocationCard() -> UIView {
+        hiddenLocationCard.backgroundColor = AppTheme.bg2
+        hiddenLocationCard.layer.cornerRadius = 14
+        hiddenLocationCard.layer.borderWidth = 1
+        hiddenLocationCard.layer.borderColor = AppTheme.cardBorder.cgColor
+        hiddenLocationCard.heightAnchor.constraint(equalToConstant: 190).isActive = true
+
+        let icon = UIImageView(image: UIImage(systemName: "lock.fill"))
+        icon.tintColor = AppTheme.accentTeal
+        icon.contentMode = .scaleAspectFit
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.widthAnchor.constraint(equalToConstant: 26).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 26).isActive = true
+
+        hiddenLocationLabel.font = AppFont.body(14)
+        hiddenLocationLabel.textColor = AppTheme.textSecondary(0.7)
+        hiddenLocationLabel.textAlignment = .center
+        hiddenLocationLabel.numberOfLines = 0
+
+        let stack = UIStackView(arrangedSubviews: [icon, hiddenLocationLabel])
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 10
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        hiddenLocationCard.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: hiddenLocationCard.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(equalTo: hiddenLocationCard.trailingAnchor, constant: -24),
+            stack.centerYAnchor.constraint(equalTo: hiddenLocationCard.centerYAnchor),
+        ])
+        return hiddenLocationCard
+    }
+
+    /// Solo para el organizador — el resto nunca ve esta fila (ellos, si
+    /// la ubicación está oculta, ven `hiddenLocationCard` en su lugar;
+    /// el organizador siempre ve el mapa real, pero necesita un sitio
+    /// desde el que revelarlo al resto).
+    private func buildRevealLocationRow() -> UIView {
+        revealLocationLabel.font = AppFont.body(13)
+        revealLocationLabel.textColor = AppTheme.textSecondary(0.55)
+        revealLocationLabel.numberOfLines = 0
+
+        var revealConfig = UIButton.Configuration.filled()
+        revealConfig.title = "Revelar ubicación"
+        revealConfig.baseBackgroundColor = AppTheme.accentTeal
+        revealConfig.baseForegroundColor = AppTheme.bg0
+        revealConfig.cornerStyle = .medium
+        revealConfig.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)
+        revealConfig.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = AppFont.body(13.5, .bold)
+            return outgoing
+        }
+        revealLocationButton.configuration = revealConfig
+        revealLocationButton.setContentHuggingPriority(.required, for: .horizontal)
+        revealLocationButton.addTarget(self, action: #selector(onRevealLocationTapped), for: .touchUpInside)
+
+        // Antes esto devolvía un `UIStackView` local distinto de la
+        // propiedad `revealLocationRow` (que se quedaba como una `UIView`
+        // vacía sin añadir a ningún sitio) — `updateLocationDisplay()`
+        // ocultaba esa propiedad fantasma, nunca la fila que de verdad se
+        // veía en pantalla, así que el botón salía para cualquiera.
+        revealLocationRow.addArrangedSubview(revealLocationLabel)
+        revealLocationRow.addArrangedSubview(revealLocationButton)
+        revealLocationRow.axis = .horizontal
+        revealLocationRow.alignment = .center
+        revealLocationRow.spacing = 10
+        return revealLocationRow
+    }
+
+    /// Se llama tras `setupUI()` y cada vez que `meetup` se refresca (al
+    /// unirse/salir, o al revelar) — decide mapa vs. tarjeta oculta, y si
+    /// enseñar la fila de "Revelar ubicación" al organizador.
+    private func updateLocationDisplay() {
+        let locationKnown = meetup.coordinate != nil
+        mapView.isHidden = !locationKnown
+        hiddenLocationCard.isHidden = locationKnown
+        if !locationKnown {
+            let area = meetup.approximateArea ?? "zona por confirmar"
+            hiddenLocationLabel.text = meetup.isJoined
+                ? "Estás apuntado — el organizador revelará el punto exacto más adelante.\nZona: \(area)."
+                : "Apúntate para poder ver el punto exacto en cuanto el organizador lo revele.\nZona: \(area)."
+        }
+
+        let showsRevealRow = meetup.isOrganizer && meetup.locationHidden
+        revealLocationRow.isHidden = !showsRevealRow
+        guard showsRevealRow else { return }
+        if meetup.locationRevealed {
+            revealLocationLabel.text = "Ubicación ya revelada a los apuntados."
+            revealLocationButton.isHidden = true
+        } else {
+            revealLocationLabel.text = "Ubicación oculta para quien no esté apuntado."
+            revealLocationButton.isHidden = false
+        }
+    }
+
+    @objc private func onRevealLocationTapped() {
+        revealLocationButton.isEnabled = false
+        Task {
+            do {
+                try await repository.revealLocation(id: meetup.id)
+                if let refreshed = try? await repository.get(id: meetup.id) {
+                    meetup = refreshed
+                    drawPin()
+                    updateLocationDisplay()
+                    onChanged()
+                }
+            } catch {
+                statusLabel.text = "Error al revelar: \(error.localizedDescription)"
+            }
+            revealLocationButton.isEnabled = true
+        }
     }
 
     // MARK: - Ubicación en vivo
@@ -217,7 +355,7 @@ final class MeetupDetailViewController: UIViewController {
             || locationManager.authorizationStatus == .authorizedAlways
         else {
             shareLocationToggle.setOn(false, animated: true)
-            showAlert(message: "Necesitas dar permiso de ubicación para compartirla con el resto de apuntados.")
+            showAlert(title: "Ubicación en vivo", message: "Necesitas dar permiso de ubicación para compartirla con el resto de apuntados.")
             return
         }
         locationManager.delegate = self
@@ -332,6 +470,11 @@ final class MeetupDetailViewController: UIViewController {
                 if let refreshed = try? await repository.get(id: meetup.id) {
                     meetup = refreshed
                     configureActionButton()
+                    // Apuntarse/salir puede cambiar si ves el punto
+                    // exacto (ver `MeetupService._to_view`) — p. ej. si ya
+                    // estaba revelada, apuntarte la destapa al momento.
+                    drawPin()
+                    updateLocationDisplay()
                     await loadParticipants()
                     onChanged()
                 }
@@ -342,11 +485,6 @@ final class MeetupDetailViewController: UIViewController {
         }
     }
 
-    private func showAlert(message: String) {
-        let alert = UIAlertController(title: "Ubicación en vivo", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
-    }
 }
 
 // MARK: - CLLocationManagerDelegate

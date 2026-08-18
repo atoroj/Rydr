@@ -262,7 +262,9 @@ final class MeetupCardCell: UICollectionViewCell {
 
         titleLabel.text = meetup.title
         placeLabel.styleAsLabel(
-            meetup.locationName ?? "Punto de encuentro sin nombre",
+            meetup.coordinate != nil
+                ? (meetup.locationName ?? "Punto de encuentro sin nombre")
+                : "🔒 \(meetup.approximateArea ?? "ubicación oculta")",
             size: 12, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.6)
 
         if let max = meetup.maxParticipants {
@@ -282,8 +284,13 @@ final class MeetupCardCell: UICollectionViewCell {
             progressWidthConstraint.isActive = true
         }
 
-        let snapshotURL = PinMapSnapshot.url(for: meetup.coordinate)
-        mapImage.load(urlString: snapshotURL?.absoluteString, placeholder: UIImage(systemName: "map"))
+        // Sin coordenada (ubicación oculta para quien mira) no hay nada
+        // que pedirle a la Static Images API — se queda con el
+        // placeholder genérico, mismo icono que mientras carga.
+        let snapshotURL = meetup.coordinate.flatMap { PinMapSnapshot.url(for: $0) }
+        mapImage.load(
+            urlString: snapshotURL?.absoluteString,
+            placeholder: UIImage(systemName: meetup.coordinate == nil ? "lock.fill" : "map"))
 
         if meetup.isOrganizer {
             actionButton.setTitle("Organizas", for: .normal)

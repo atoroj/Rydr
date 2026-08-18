@@ -8,6 +8,7 @@ from app.riders.domain.follow import Follow, FollowStatus
 from app.riders.domain.follow_repository import FollowRepository
 from app.routes.domain.route import Route
 from app.routes.domain.route_repository import RouteRepository
+from app.shared.errors import NotFoundError
 from app.users.domain.user import User
 from app.users.domain.user_repository import UserRepository
 
@@ -55,7 +56,7 @@ class FollowService:
             raise ValueError("No puedes seguirte a ti mismo")
         target = self.user_repo.get_by_id(target_id)
         if target is None:
-            raise ValueError("Usuario no encontrado")
+            raise NotFoundError("Usuario no encontrado")
 
         existing = self.follow_repo.get_between(follower_id, target_id)
         if existing is not None:
@@ -77,7 +78,7 @@ class FollowService:
     def accept(self, request_id: int, current_user_id: int) -> Follow:
         request = self.follow_repo.get_by_id(request_id)
         if request is None:
-            raise ValueError("Solicitud no encontrada")
+            raise NotFoundError("Solicitud no encontrada")
         if request.followee_id != current_user_id:
             raise PermissionError("No puedes aceptar una solicitud que no es tuya")
         return self.follow_repo.update_status(request_id, FollowStatus.ACCEPTED)
@@ -85,7 +86,7 @@ class FollowService:
     def reject(self, request_id: int, current_user_id: int) -> None:
         request = self.follow_repo.get_by_id(request_id)
         if request is None:
-            raise ValueError("Solicitud no encontrada")
+            raise NotFoundError("Solicitud no encontrada")
         if request.followee_id != current_user_id:
             raise PermissionError("No puedes rechazar una solicitud que no es tuya")
         self.follow_repo.delete(request_id)
@@ -121,7 +122,7 @@ class FollowService:
     def get_rider_profile(self, target_id: int, viewer_id: int) -> RiderProfile:
         target = self.user_repo.get_by_id(target_id)
         if target is None:
-            raise ValueError("Usuario no encontrado")
+            raise NotFoundError("Usuario no encontrado")
 
         status = self.follow_status_between(viewer_id, target_id)
         can_view_private_content = status in ("self", "following")

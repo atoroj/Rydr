@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.motorbikes.domain.motorbike_repository import MotorbikeRepostiroy
 from app.motorbikes.domain.motorbike import Motorbike
 from app.motorbikes.infraestructure.motorbike_model import MotorbikeModel
+from app.shared.errors import NotFoundError
 
 
 class SqlAlchemyMotorbikeRepository(MotorbikeRepostiroy):
@@ -51,7 +52,7 @@ class SqlAlchemyMotorbikeRepository(MotorbikeRepostiroy):
             MotorbikeModel.id == motorbike_id, MotorbikeModel.user_id == user_id
         ).first()
         if target_db is None:
-            raise ValueError("Moto no encontrada para este usuario")
+            raise NotFoundError("Moto no encontrada para este usuario")
 
         # Solo puede haber una moto "actual" por usuario: desmarca el resto.
         self.db.query(MotorbikeModel).filter(
@@ -68,7 +69,7 @@ class SqlAlchemyMotorbikeRepository(MotorbikeRepostiroy):
             MotorbikeModel.id == motorbike_id, MotorbikeModel.user_id == user_id
         ).first()
         if target_db is None:
-            raise ValueError("Moto no encontrada para este usuario")
+            raise NotFoundError("Moto no encontrada para este usuario")
 
         for key, value in fields.items():
             if value is None:
@@ -86,6 +87,6 @@ class SqlAlchemyMotorbikeRepository(MotorbikeRepostiroy):
             MotorbikeModel.id == motorbike_id, MotorbikeModel.user_id == user_id
         ).first()
         if target_db is None:
-            raise ValueError("Moto no encontrada para este usuario")
+            raise NotFoundError("Moto no encontrada para este usuario")
         self.db.delete(target_db)
         self.db.commit()
