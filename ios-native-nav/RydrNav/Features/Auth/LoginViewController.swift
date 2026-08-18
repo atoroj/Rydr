@@ -1,3 +1,4 @@
+import GoogleSignIn
 import UIKit
 
 /// Espejo de lib/features/auth/presentation/login_screen.dart.
@@ -7,6 +8,8 @@ final class LoginViewController: UIViewController {
     private let emailField = UITextField()
     private let passwordField = UITextField()
     private let loginButton = UIButton(type: .system)
+    private let googleButton = UIButton(type: .system)
+    private let createAccountButton = UIButton(type: .system)
     private let spinner = UIActivityIndicatorView(style: .medium)
     private var stackCenterYConstraint: NSLayoutConstraint!
 
@@ -102,9 +105,25 @@ final class LoginViewController: UIViewController {
         loginButton.heightAnchor.constraint(equalToConstant: AppTheme.gloveButtonHeight).isActive = true
         loginButton.addTarget(self, action: #selector(onLoginTapped), for: .touchUpInside)
 
+        googleButton.setTitle("Continuar con Google", for: .normal)
+        googleButton.titleLabel?.font = AppFont.body(15, .semibold)
+        googleButton.setTitleColor(AppTheme.text, for: .normal)
+        googleButton.backgroundColor = AppTheme.bg2
+        googleButton.layer.cornerRadius = 8
+        googleButton.layer.borderWidth = 1
+        googleButton.layer.borderColor = AppTheme.cardBorder.cgColor
+        googleButton.heightAnchor.constraint(equalToConstant: AppTheme.gloveButtonHeight).isActive = true
+        googleButton.addTarget(self, action: #selector(onGoogleTapped), for: .touchUpInside)
+
+        createAccountButton.setTitle("¿No tienes cuenta? Crea una", for: .normal)
+        createAccountButton.titleLabel?.font = AppFont.body(14)
+        createAccountButton.setTitleColor(AppTheme.textSecondary(0.7), for: .normal)
+        createAccountButton.addTarget(self, action: #selector(onCreateAccountTapped), for: .touchUpInside)
+
         let stack = UIStackView(arrangedSubviews: [
             logoStack, spacer(48), emailField, spacer(16), passwordField, spacer(32),
-            loginButton, spinner,
+            loginButton, spacer(14), dividerRow(), spacer(14), googleButton, spinner,
+            spacer(20), createAccountButton,
         ])
         stack.axis = .vertical
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -124,11 +143,29 @@ final class LoginViewController: UIViewController {
         return v
     }
 
+    private func dividerRow() -> UIView {
+        func line() -> UIView {
+            let v = UIView()
+            v.backgroundColor = AppTheme.cardBorder
+            v.heightAnchor.constraint(equalToConstant: 1).isActive = true
+            return v
+        }
+        let label = UILabel()
+        label.styleAsLabel("o", size: 12.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.6)
+        label.setContentHuggingPriority(.required, for: .horizontal)
+
+        let row = UIStackView(arrangedSubviews: [line(), label, line()])
+        row.axis = .horizontal
+        row.spacing = 10
+        row.alignment = .center
+        return row
+    }
+
     @objc private func onLoginTapped() {
         guard let email = emailField.text, email.contains("@"),
               let password = passwordField.text, password.count >= 2
         else {
-            showError("Revisa el email y la contraseña.")
+            showAlert(title: "No se pudo entrar", message: "Revisa el email y la contraseña.")
             return
         }
 
@@ -145,16 +182,48 @@ final class LoginViewController: UIViewController {
                 await MainActor.run {
                     self.loginButton.isEnabled = true
                     self.spinner.stopAnimating()
-                    self.showError("Email o contraseña incorrectos")
+                    self.showAlert(title: "No se pudo entrar", message: "Email o contraseña incorrectos")
                 }
             }
         }
     }
 
-    private func showError(_ message: String) {
-        let alert = UIAlertController(title: "No se pudo entrar", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        present(alert, animated: true)
+    @objc private func onGoogleTapped() {
+        googleButton.isEnabled = false
+        spinner.startAnimating()
+
+        GIDSignIn.sharedInstance.signIn(withPresenting: self) { [weak self] signInResult, error in
+            guard let self else { return }
+            guard let user = signInResult?.user, let idToken = user.idToken?.tokenString, let email = user.profile?.email else {
+                self.googleButton.isEnabled = true
+                self.spinner.stopAnimating()
+                // `error` es `nil` si simplemente canceló el diálogo de
+                // Google — no hace falta ni avisar de eso como un fallo.
+                if let error, (error as NSError).code != GIDSignInError.canceled.rawValue {
+                    self.showAlert(title: "No se pudo entrar", message: "No se ha podido completar el login con Google.")
+                }
+                return
+            }
+
+            Task {
+                do {
+                    try await AuthManager.shared.loginWithGoogle(idToken: idToken, email: email)
+                    await MainActor.run {
+                        (UIApplication.shared.delegate as? AppDelegate)?.showMain()
+                    }
+                } catch {
+                    await MainActor.run {
+                        self.googleButton.isEnabled = true
+                        self.spinner.stopAnimating()
+                        self.showAlert(title: "No se pudo entrar", message: "No se ha podido completar el login con Google.")
+                    }
+                }
+            }
+        }
+    }
+
+    @objc private func onCreateAccountTapped() {
+        navigationController?.pushViewController(CreateAccountViewController(), animated: true)
     }
 }
 

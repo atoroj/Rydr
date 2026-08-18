@@ -37,6 +37,20 @@ final class AuthManager {
         NotificationCenter.default.post(name: .authDidChange, object: nil)
     }
 
+    func loginWithGoogle(idToken: String, email: String) async throws {
+        let user = try await repository.loginWithGoogle(idToken: idToken, email: email)
+        currentUser = user
+        NotificationCenter.default.post(name: .authDidChange, object: nil)
+    }
+
+    /// Registro propio (usuario/email/contraseña) — deja la sesión ya
+    /// iniciada, igual que `login`.
+    func createAccount(username: String, email: String, password: String) async throws {
+        let user = try await repository.createAccount(username: username, email: email, password: password)
+        currentUser = user
+        NotificationCenter.default.post(name: .authDidChange, object: nil)
+    }
+
     func logout() {
         repository.logout()
         currentUser = nil

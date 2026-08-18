@@ -26,3 +26,9 @@ class UserRepository(ABC):
     @abstractmethod
     def update_profile(self, user_id: int, username: str | None, avatar_url: str | None, is_private: bool | None) -> User:
         pass
+
+    @abstractmethod
+    def set_google_id(self, user_id: int, google_id: str) -> User:
+        """Enlaza una cuenta ya existente (creada con contraseña) con una
+        cuenta de Google — ver `UserService.get_or_create_google_user`."""
+        pass

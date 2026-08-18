@@ -1,3 +1,4 @@
+import GoogleSignIn
 import UIKit
 
 /// Ciclo de vida clásico de una sola ventana (sin UIScene): más simple y con
@@ -44,6 +45,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         }
 
         return true
+    }
+
+    // Sin ciclo de vida de escenas (ver arriba), este es el único sitio
+    // por el que puede volver el control a la app tras el login de
+    // Google — sin esto, `GIDSignIn` nunca sabe que Safari/la ventana de
+    // login ya terminó y la llamada a `signIn(withPresenting:)` se queda
+    // colgada para siempre.
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        GIDSignIn.sharedInstance.handle(url)
     }
 
     func showMain() {

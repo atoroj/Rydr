@@ -30,3 +30,7 @@ def run_light_migrations(engine: Engine) -> None:
     _add_column_if_missing(engine, "meetup_participants", "last_lng", "last_lng FLOAT")
     _add_column_if_missing(engine, "meetup_participants", "last_location_at", "last_location_at DATETIME")
     _add_column_if_missing(engine, "track_points", "is_segment_start", "is_segment_start BOOLEAN DEFAULT 0")
+    _add_column_if_missing(engine, "meetups", "location_hidden", "location_hidden BOOLEAN DEFAULT 0")
+    _add_column_if_missing(engine, "meetups", "approximate_area", "approximate_area VARCHAR")
+    _add_column_if_missing(engine, "meetups", "location_revealed", "location_revealed BOOLEAN DEFAULT 0")
+    _add_column_if_missing(engine, "users", "google_id", "google_id VARCHAR")

@@ -12,6 +12,9 @@ packages:
   MapboxMapsPackage:
     url: https://github.com/mapbox/mapbox-maps-ios.git
     exactVersion: 11.28.0
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: 7.1.0
 
 targets:
   RydrNav:
@@ -58,6 +61,11 @@ targets:
         # Sin esto, iOS ignora en silencio cualquier Activity.request() —
         # ni error, ni actividad, nada.
         NSSupportsLiveActivities: true
+        # --- Login con Google (GoogleSignIn SDK) ---
+        GIDClientID: 289887514534-o5449n92jc0khe05ur95tmks5j8nukvi.apps.googleusercontent.com
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - com.googleusercontent.apps.289887514534-o5449n92jc0khe05ur95tmks5j8nukvi
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.rydr.rydrnav
@@ -86,6 +94,8 @@ targets:
         product: MapboxDirections
       - package: MapboxMapsPackage
         product: MapboxMaps
+      - package: GoogleSignIn
+        product: GoogleSignIn
       - target: RydrRideWidgets
         embed: true
 

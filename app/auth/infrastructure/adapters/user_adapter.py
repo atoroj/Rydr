@@ -19,3 +19,7 @@ class LocalUserAdapter(UserProviderPort):
             password_hash=real_user.password,
             role=real_user.role
         )
+
+    def get_or_create_google_user(self, email: str, google_id: str, avatar_url: str | None) -> Auth:
+        real_user = self.service.get_or_create_google_user(email, google_id, avatar_url)
+        return Auth(email=real_user.email, password_hash=real_user.password, role=real_user.role)
