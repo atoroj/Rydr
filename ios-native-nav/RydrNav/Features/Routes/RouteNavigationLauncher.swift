@@ -74,24 +74,29 @@ final class RouteNavigationLauncher: NSObject {
         }
         ensureLocationAuthorization()
 
-        let orderedPath = reversed ? Array(route.path.reversed()) : route.path
-        var coordinates = orderedPath
+        // Ver `RouteModel.segments` — cada tramo grabado por separado (un
+        // hueco por cada pausa). Al revés, se invierte tanto el orden de
+        // los tramos como los puntos dentro de cada uno.
+        var orderedSegments = reversed
+            ? route.segments.reversed().map { Array($0.reversed()) }
+            : route.segments
+
         // Punto de partida "en vivo", no grabado — si estás lejos, se mete
         // delante para que la propia llamada de matching calcule el camino
         // real hasta el trazado, en vez de arrancar la guía ya sobre el
         // trazado y dejarte "teletransportado" hasta él.
         var prependedLiveLocation = false
-        if let current = await currentLocation(),
+        if let current = await currentLocation(), let firstPoint = orderedSegments.first?.first,
            CLLocation(latitude: current.latitude, longitude: current.longitude)
-               .distance(from: CLLocation(latitude: orderedPath[0].latitude, longitude: orderedPath[0].longitude))
+               .distance(from: CLLocation(latitude: firstPoint.latitude, longitude: firstPoint.longitude))
                > Self.approachThresholdMeters
         {
-            coordinates.insert(current, at: 0)
+            orderedSegments[0].insert(current, at: 0)
             prependedLiveLocation = true
         }
 
         let navigationRoutes = try await matchToNavigationRoutes(
-            coordinates: coordinates, generousRadiusForFirstPoint: prependedLiveLocation)
+            segments: orderedSegments, generousRadiusForFirstPoint: prependedLiveLocation)
         present(navigationRoutes: navigationRoutes, from: viewController)
 
         // La Map Matching API a veces no logra encajar todo el trazado en
@@ -196,23 +201,27 @@ final class RouteNavigationLauncher: NSObject {
     }
 
     private func matchToNavigationRoutes(
-        coordinates: [CLLocationCoordinate2D], generousRadiusForFirstPoint: Bool
+        segments: [[CLLocationCoordinate2D]], generousRadiusForFirstPoint: Bool
     ) async throws -> NavigationRoutes {
         // La API solo acepta hasta 100 puntos; simplificamos con
         // Douglas-Peucker conservando las curvas (ver más abajo) en vez de
-        // muestrear a ciegas.
-        let sampled = downsample(coordinates, maxPoints: 100)
+        // muestrear a ciegas — tramo por tramo, no todo el recorrido junto.
+        let (sampled, isBoundary) = downsampleSegments(segments, maxPoints: 100)
 
         // Cada `Waypoint` nace con `separatesLegs = true`: el SDK lo trata
         // como una parada real (tramo propio, marcador, "llegada"...). Con
         // 100 puntos así, la ruta se trocea en ~99 tramos minúsculos — de
         // ahí el collar de marcadores en el mapa y que no salgan
-        // indicaciones de giro de verdad. Solo el primer y el último punto
-        // son paradas reales; el resto son puntos de forma para que el
-        // trazado siga tu recorrido exacto, no paradas.
+        // indicaciones de giro de verdad. El principio/final de cada TRAMO
+        // (no solo del recorrido entero) también es parada real: el punto
+        // donde se pausó y el de "Reanudar" — así el SDK calcula cómo
+        // llegar de un tramo al siguiente por carretera de verdad, en vez
+        // de dar por hecho que el hueco de la pausa también se recorrió en
+        // línea recta como el resto del trazado. El resto son puntos de
+        // forma para que el trazado siga tu recorrido exacto, no paradas.
         let waypoints = sampled.enumerated().map { index, coordinate -> Waypoint in
             var waypoint = Waypoint(coordinate: coordinate)
-            waypoint.separatesLegs = (index == 0 || index == sampled.count - 1)
+            waypoint.separatesLegs = isBoundary[index]
             // El primer punto, cuando es tu posición en vivo (no un punto
             // grabado del trazado), puede tener bastante error de GPS y no
             // caer justo sobre la carretera — un radio de búsqueda estrecho
@@ -242,6 +251,41 @@ final class RouteNavigationLauncher: NSObject {
 
         let routingProvider = navigationProvider.mapboxNavigation.routingProvider()
         return try await routingProvider.calculateRoutes(options: matchOptions).value
+    }
+
+    /// Simplifica tramo por tramo (nunca uniendo puntos de tramos
+    /// distintos en el mismo `douglasPeucker`, para no arrastrar el hueco
+    /// de una pausa a la simplificación) y marca qué puntos del resultado
+    /// son frontera de un tramo — el principio y el final de CADA uno, no
+    /// solo del recorrido entero. Sin pausas (un único tramo) el resultado
+    /// es idéntico al `downsample` de antes de esta función existir.
+    ///
+    /// Cada tramo se queda sus dos extremos siempre (son las paradas
+    /// reales) y el resto del presupuesto de 100 puntos se reparte entre
+    /// ellos a prorrata para los puntos de forma intermedios.
+    private func downsampleSegments(
+        _ segments: [[CLLocationCoordinate2D]], maxPoints: Int
+    ) -> (coordinates: [CLLocationCoordinate2D], isBoundary: [Bool]) {
+        let realSegments = segments.filter { !$0.isEmpty }
+        guard !realSegments.isEmpty else { return ([], []) }
+
+        let reservedForBoundaries = min(maxPoints, realSegments.count * 2)
+        let remainingBudget = maxPoints - reservedForBoundaries
+        let totalOriginalPoints = realSegments.reduce(0) { $0 + $1.count }
+
+        var coordinates: [CLLocationCoordinate2D] = []
+        var isBoundary: [Bool] = []
+        for segment in realSegments {
+            let interiorShare = totalOriginalPoints > 0
+                ? Int((Double(segment.count) / Double(totalOriginalPoints)) * Double(remainingBudget))
+                : 0
+            let sampled = downsample(segment, maxPoints: max(2, interiorShare + 2))
+            for (index, coordinate) in sampled.enumerated() {
+                coordinates.append(coordinate)
+                isBoundary.append(index == 0 || index == sampled.count - 1)
+            }
+        }
+        return (coordinates, isBoundary)
     }
 
     /// Antes cogía 1 punto de cada N a intervalos regulares — a ciegas, sin
