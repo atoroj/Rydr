@@ -27,7 +27,14 @@ targets:
       properties:
         CFBundleDisplayName: RydrNav
         UILaunchScreen: {}
-        MBXAccessToken: ***REMOVED-MAPBOX-TOKEN***
+        # Token público ("pk.") de Mapbox — se lee de la variable de
+        # entorno MAPBOX_ACCESS_TOKEN al generar el proyecto
+        # (`xcodegen generate`), nunca hardcodeado aquí: aunque sea un
+        # token "publicable" por diseño de Mapbox, GitHub lo bloquea al
+        # hacer push igualmente (puede usarse desde otra app y consumir
+        # tu cuota), así que fuera del repo. Expórtala en tu shell antes
+        # de generar el proyecto (ver README.md).
+        MBXAccessToken: ${MAPBOX_ACCESS_TOKEN}
         NSLocationWhenInUseUsageDescription: RydrNav necesita tu ubicación para guiarte por la ruta.
         NSLocationAlwaysAndWhenInUseUsageDescription: RydrNav necesita tu ubicación en segundo plano para seguir guiándote con la pantalla bloqueada.
         UIBackgroundModes:

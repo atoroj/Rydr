@@ -24,6 +24,11 @@ ios-native-nav/RydrNav.xcodeproj/
 DerivedData/
 *.xcuserstate
 xcuserdata/
+# Los Info.plist también los genera XcodeGen a partir de project.yml (ver
+# "properties:" de cada target) — no versionarlos evita que el token de
+# Mapbox (u otro dato inyectado por variable de entorno) acabe en git.
+ios-native-nav/RydrNav/Info.plist
+ios-native-nav/RydrRideWidgets/Info.plist
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
