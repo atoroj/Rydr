@@ -1,3 +1,18 @@
+{
+	# Dentro de Docker, un cliente que conecta sin SNI (típico al usar la
+	# IP del VPS en vez de un dominio de verdad — la mayoría de clientes
+	# no mandan SNI para una IP literal, por spec) hace que Caddy intente
+	# encontrar el certificado por la IP LOCAL del socket... que dentro
+	# del contenedor es la IP interna de Docker, nunca la IP pública del
+	# VPS — así que el handshake fallaba siempre con "no certificate
+	# available". `default_sni` le dice a Caddy qué identidad asumir
+	# cuando no hay SNI, evitando ese fallback roto. Verificado en local
+	# tanto con IP como con dominio/"localhost" — inofensivo en los dos
+	# casos, así que se deja siempre puesto, no solo mientras no haya
+	# dominio real.
+	default_sni {$DOMAIN}
+}
+
 {$DOMAIN} {
 	# Términos/privacidad servidos directamente por Caddy, no por la app
 	# Python — así se pueden editar (ver ./legal) y desplegar sin tocar
