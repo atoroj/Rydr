@@ -1,0 +1,137 @@
+name: RydrNav
+options:
+  bundleIdPrefix: com.rydr
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  MapboxNavigation:
+    url: https://github.com/mapbox/mapbox-navigation-ios.git
+    from: 3.0.0
+  MapboxMapsPackage:
+    url: https://github.com/mapbox/mapbox-maps-ios.git
+    exactVersion: 11.28.0
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: 7.1.0
+
+targets:
+  RydrNav:
+    type: application
+    platform: iOS
+    sources:
+      - RydrNav
+    info:
+      path: RydrNav/Info.plist
+      properties:
+        CFBundleDisplayName: RydrNav
+        UILaunchScreen: {}
+        MBXAccessToken: ***REMOVED-MAPBOX-TOKEN***
+        NSLocationWhenInUseUsageDescription: RydrNav necesita tu ubicación para guiarte por la ruta.
+        NSLocationAlwaysAndWhenInUseUsageDescription: RydrNav necesita tu ubicación en segundo plano para seguir guiándote con la pantalla bloqueada.
+        UIBackgroundModes:
+          - location
+          - audio
+        # Un iPhone físico habla con el backend de desarrollo por HTTP
+        # plano a una IP de la red local (ver APIConstants.swift) — ATS
+        # bloquea eso por defecto salvo loopback. `NSAllowsLocalNetworking`
+        # solo abre la excepción para direcciones de red local/loopback,
+        # no para internet en general (a diferencia de
+        # `NSAllowsArbitraryLoads`). Y sin la descripción de uso, iOS 14+
+        # puede negar en silencio el acceso a la red local sin ni
+        # siquiera preguntar.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: RydrNav necesita acceder a tu red local para hablar con el backend de desarrollo mientras pruebas en el teléfono.
+        # Sin UIApplicationSceneManifest a propósito: usamos el ciclo de
+        # vida clásico de una sola ventana (AppDelegate.window), no el
+        # sistema de escenas.
+        # Fuentes custom del rediseño (Resources/Fonts) — sin esto iOS las
+        # ignora en silencio y cae a San Francisco.
+        UIAppFonts:
+          - Barlow-Regular.ttf
+          - Barlow-Medium.ttf
+          - Barlow-SemiBold.ttf
+          - Barlow-Bold.ttf
+          - BarlowCondensed-SemiBold.ttf
+          - BarlowCondensed-Bold.ttf
+          - BarlowSemiCondensed-Medium.ttf
+          - BarlowSemiCondensed-SemiBold.ttf
+        # Sin esto, iOS ignora en silencio cualquier Activity.request() —
+        # ni error, ni actividad, nada.
+        NSSupportsLiveActivities: true
+        # --- Login con Google (GoogleSignIn SDK) ---
+        GIDClientID: 289887514534-o5449n92jc0khe05ur95tmks5j8nukvi.apps.googleusercontent.com
+        CFBundleURLTypes:
+          - CFBundleURLSchemes:
+              - com.googleusercontent.apps.289887514534-o5449n92jc0khe05ur95tmks5j8nukvi
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rydr.rydrnav
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Sin esto el proyecto nacía en firma manual sin ningún equipo
+        # asignado — Xcode ni deja elegir un iPhone físico como destino
+        # hasta que entras a Signing & Capabilities y lo arreglas a mano.
+        # Con Automatic, solo hace falta elegir el equipo (tu Apple ID)
+        # una vez ahí; XcodeGen no puede rellenar DEVELOPMENT_TEAM por ti
+        # porque es distinto para cada cuenta.
+        CODE_SIGN_STYLE: Automatic
+        # Xcode 16+ compila el código de la app en un .dylib aparte para
+        # acelerar iteración/Previews. Solo funciona si lo lanza el propio
+        # Xcode (▶️); vía `xcodebuild`/`simctl` (como hacemos aquí) el
+        # binario principal no llega a cargar ese dylib y la app arranca
+        # sin ejecutar nada del código propio — pantalla negra sin crash.
+        ENABLE_DEBUG_DYLIB: "NO"
+    dependencies:
+      - package: MapboxNavigation
+        product: MapboxNavigationCore
+      - package: MapboxNavigation
+        product: MapboxNavigationUIKit
+      - package: MapboxNavigation
+        product: MapboxDirections
+      - package: MapboxMapsPackage
+        product: MapboxMaps
+      - package: GoogleSignIn
+        product: GoogleSignIn
+      - target: RydrRideWidgets
+        embed: true
+
+  # Live Activity / Dynamic Island mientras se graba una ruta. Target
+  # aparte porque WidgetKit lo exige (una extensión de verdad, no una
+  # pantalla más de la app) — y con deployment target propio en 16.1
+  # (Live Activities no existen antes) aunque la app en sí siga dando
+  # soporte desde iOS 15; ver RydrRideActivityAttributes.swift para cómo
+  # se comparte el mismo tipo con la app sin duplicar el archivo.
+  RydrRideWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.2"
+    sources:
+      - RydrRideWidgets
+      - path: RydrNav/Core/LiveActivity/RydrRideActivityAttributes.swift
+        group: RydrRideWidgets
+    info:
+      path: RydrRideWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: RydrRideWidgets
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.rydr.rydrnav.RydrRideWidgets
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_DEBUG_DYLIB: "NO"
+
+schemes:
+  RydrNav:
+    build:
+      targets:
+        RydrNav: all
+        RydrRideWidgets: all
+    run:
+      config: Debug
