@@ -22,10 +22,14 @@ from app.routes.infrastructure.route_model import RouteModel
 from app.riders.infrastructure.follow_model import FollowModel
 from app.meetups.infrastructure.meetup_model import MeetupModel, MeetupParticipantModel
 
-# Crear tablas (Solo para desarrollo rápido)
+# Crea las tablas que falten (no toca las que ya existen).
 Base.metadata.create_all(bind=engine)
-# Añade a la BD existente las columnas que se han sumado a modelos ya
-# creados (create_all no altera tablas existentes, solo crea las que faltan)
+# `run_light_migrations` añade a mano las columnas que se han ido
+# sumando a modelos ya existentes (create_all no altera tablas ya
+# creadas) — portable entre SQLite y Postgres (ver
+# app/shared/migrations.py), así que corre siempre: hace falta tanto la
+# primera vez en un servidor nuevo como en cada actualización posterior
+# que añada una columna.
 run_light_migrations(engine)
 
 app = FastAPI()

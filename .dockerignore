@@ -1,0 +1,23 @@
+# La app iOS no tiene nada que hacer dentro de la imagen del backend.
+ios-native-nav/
+
+.git/
+.github/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Datos locales — el servidor usa Postgres en un volumen aparte, y las
+# fotos subidas van a su propio volumen montado (ver docker-compose.yml).
+*.db
+uploads/
+
+# Secretos: se pasan por env_file en docker-compose.yml, nunca horneados
+# dentro de la imagen.
+.env
+.env.*
+!.env.example
+
+tests/
+.vscode/
+.idea/

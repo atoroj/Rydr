@@ -1,5 +1,9 @@
 #SQLite
 .rydr.db
+# Vuelve a aparecer suelto de vez en cuando (algún proceso que arranca
+# sin cargar .env cae al valor por defecto sin la barra inicial) — no es
+# la base de datos de desarrollo real, esa es la de arriba.
+/rydr.db
 
 # Imágenes subidas por los usuarios (perfil/motos/rutas), servidas como estático
 /uploads/
