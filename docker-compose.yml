@@ -17,6 +17,13 @@ services:
       retries: 10
 
   backend:
+    # Los dos a la vez, a propósito: en local, "docker compose up --build"
+    # construye desde el Dockerfile y etiqueta el resultado con este mismo
+    # nombre; en el VPS, GitHub Actions ya ha subido esa imagen a GHCR
+    # (ver .github/workflows/deploy.yml), así que ahí "docker compose
+    # pull && up -d" (sin --build) se limita a descargarla, sin compilar
+    # nada en el propio servidor.
+    image: ghcr.io/atoroj/rydr-backend:${IMAGE_TAG:-latest}
     build: .
     restart: unless-stopped
     env_file: .env
