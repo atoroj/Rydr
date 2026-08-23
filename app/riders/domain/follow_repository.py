@@ -36,3 +36,11 @@ class FollowRepository(ABC):
     @abstractmethod
     def delete(self, follow_id: int) -> None:
         pass
+
+    @abstractmethod
+    def delete_all_for_user(self, user_id: int) -> None:
+        """Borra TODAS las relaciones donde `user_id` aparece, como
+        follower o como followee, sin importar el estado (`PENDING` y
+        `ACCEPTED`) — a diferencia de `list_following`/`list_followers`,
+        que solo traen las `ACCEPTED`. Se usa al borrar la cuenta."""
+        pass

@@ -42,3 +42,18 @@ async def upload_image(
     (UPLOAD_DIR / filename).write_bytes(contents)
 
     return {"url": f"/uploads/{filename}"}
+
+
+def delete_upload(url: str | None) -> None:
+    """Borra el archivo físico correspondiente a una URL guardada
+    (`/uploads/<archivo>`) — usado por `AccountDeletionService` al
+    limpiar avatar/fotos de moto/portadas de ruta. No hace nada si `url`
+    es `None` (nunca se subió nada) o si el archivo ya no está ahí (no
+    hay nada que limpiar); tampoco deja borrar fuera de `UPLOAD_DIR` —
+    `url` viene de la base de datos, no de una petición, pero por si
+    algún registro antiguo tuviera una URL rara."""
+    if not url or not url.startswith("/uploads/"):
+        return
+    path = UPLOAD_DIR / Path(url).name
+    if path.is_file() and path.resolve().parent == UPLOAD_DIR.resolve():
+        path.unlink(missing_ok=True)

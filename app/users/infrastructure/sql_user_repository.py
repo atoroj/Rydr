@@ -87,3 +87,10 @@ class SqlAlchemyUserRepository(UserRepository):
         self.db.commit()
         self.db.refresh(user_db)
         return self._to_domain(user_db)
+
+    def delete(self, user_id: int) -> None:
+        user_db = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+        if user_db is None:
+            raise ValueError("Usuario no encontrado")
+        self.db.delete(user_db)
+        self.db.commit()

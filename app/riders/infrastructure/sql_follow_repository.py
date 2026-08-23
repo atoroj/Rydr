@@ -69,3 +69,9 @@ class SqlAlchemyFollowRepository(FollowRepository):
         if m:
             self.db.delete(m)
             self.db.commit()
+
+    def delete_all_for_user(self, user_id: int) -> None:
+        self.db.query(FollowModel).filter(
+            (FollowModel.follower_id == user_id) | (FollowModel.followee_id == user_id)
+        ).delete(synchronize_session=False)
+        self.db.commit()

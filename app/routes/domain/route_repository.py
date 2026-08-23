@@ -24,3 +24,8 @@ class RouteRepository(ABC):
     @abstractmethod
     def increment_times_ridden(self, route_id: int) -> None:
         pass
+
+    @abstractmethod
+    def delete(self, route_id: int, author_id: int) -> None:
+        """Solo el autor puede borrar."""
+        pass

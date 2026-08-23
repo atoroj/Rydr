@@ -36,3 +36,7 @@ class UserRepository(ABC):
     @abstractmethod
     def update_password(self, user_id: int, hashed_password: str) -> User:
         pass
+
+    @abstractmethod
+    def delete(self, user_id: int) -> None:
+        pass

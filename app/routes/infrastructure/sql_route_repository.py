@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.routes.domain.route import Route
 from app.routes.domain.route_repository import RouteRepository
 from app.routes.infrastructure.route_model import RouteModel
+from app.shared.errors import NotFoundError
 
 
 class SqlAlchemyRouteRepository(RouteRepository):
@@ -65,3 +66,12 @@ class SqlAlchemyRouteRepository(RouteRepository):
         if route_db:
             route_db.times_ridden += 1
             self.db.commit()
+
+    def delete(self, route_id: int, author_id: int) -> None:
+        route_db = self.db.query(RouteModel).filter(
+            RouteModel.id == route_id, RouteModel.author_id == author_id
+        ).first()
+        if route_db is None:
+            raise NotFoundError("Ruta no encontrada para este usuario")
+        self.db.delete(route_db)
+        self.db.commit()
