@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Sin "ports": nadie fuera de esta red de Docker Compose necesita
+    # llegar a Postgres directamente, solo el propio backend.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    # Los dos a la vez, a propósito: en local, "docker compose up --build"
+    # construye desde el Dockerfile y etiqueta el resultado con este mismo
+    # nombre; en el VPS, GitHub Actions ya ha subido esa imagen a GHCR
+    # (ver .github/workflows/deploy.yml), así que ahí "docker compose
+    # pull && up -d" (sin --build) se limita a descargarla, sin compilar
+    # nada en el propio servidor.
+    image: ghcr.io/atoroj/rydr-backend:${IMAGE_TAG:-latest}
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    volumes:
+      # Fotos de perfil/portada subidas (ver app/shared/uploads_router.py)
+      # — sin esto, se perderían en cada `docker compose up --build`.
+      - uploads_data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    # Sin "ports": el único que le habla es Caddy, por la red interna.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./legal:/srv/legal:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  uploads_data:
+  caddy_data:
+  caddy_config:

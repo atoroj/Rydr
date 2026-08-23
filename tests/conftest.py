@@ -6,6 +6,14 @@ from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.shared.database import Base, get_db
+from app.shared.rate_limit import limiter
+
+# `TestClient` no hace peticiones de red de verdad: todas comparten la
+# misma "IP" (`get_remote_address` ve siempre "testclient"), así que sin
+# esto los límites por IP de app/shared/rate_limit.py se agotarían entre
+# tests sin que eso tenga nada que ver con lo que cada test comprueba de
+# verdad — ver el propio módulo para el porqué de cada límite.
+limiter.enabled = False
 
 # 1. Base de datos en memoria (se borra al terminar el test)
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"

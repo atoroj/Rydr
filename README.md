@@ -77,3 +77,22 @@ Rydr/
     ```
     pytest
     ```
+
+---
+
+## 📱 App nativa iOS (`ios-native-nav/`)
+
+Swift/UIKit, gestionado con [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+(`project.yml` es la fuente de verdad — el `.xcodeproj` no se versiona).
+
+```bash
+export MAPBOX_ACCESS_TOKEN=tu_token_publico_de_mapbox   # ver mapbox.com/account/access-tokens
+cd ios-native-nav
+xcodegen generate
+open RydrNav.xcodeproj
+```
+
+`MAPBOX_ACCESS_TOKEN` hace falta siempre antes de `xcodegen generate` — se
+inyecta en `Info.plist` en tiempo de generación (nunca hardcodeado en
+`project.yml`, ver el comentario ahí) para que no acabe en el repo.
+`Info.plist` está en `.gitignore` porque también es un archivo generado.

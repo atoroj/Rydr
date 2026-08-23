@@ -1,0 +1,10 @@
+{$DOMAIN} {
+	# Términos/privacidad servidos directamente por Caddy, no por la app
+	# Python — así se pueden editar (ver ./legal) y desplegar sin tocar
+	# ni reconstruir el backend.
+	handle_path /legal/* {
+		root * /srv/legal
+		file_server
+	}
+	reverse_proxy backend:8000
+}

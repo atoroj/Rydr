@@ -1,5 +1,34 @@
 #SQLite
 .rydr.db
+# Vuelve a aparecer suelto de vez en cuando (algún proceso que arranca
+# sin cargar .env cae al valor por defecto sin la barra inicial) — no es
+# la base de datos de desarrollo real, esa es la de arriba.
+/rydr.db
+
+# Imágenes subidas por los usuarios (perfil/motos/rutas), servidas como estático
+/uploads/
+
+# macOS / editores — estado personal, no aporta nada al repo
+.DS_Store
+.vscode/
+.idea/
+
+# Pipfile vacío que apareció suelto dentro de app/ (probablemente un
+# `pipenv install` lanzado por error desde ahí) — el real vive en la raíz.
+/app/Pipfile
+
+# iOS nativo (ios-native-nav/RydrNav): el .xcodeproj lo genera XcodeGen a
+# partir de project.yml (`xcodegen generate`), no se versiona para evitar
+# el ruido/conflictos típicos de project.pbxproj.
+ios-native-nav/RydrNav.xcodeproj/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+# Los Info.plist también los genera XcodeGen a partir de project.yml (ver
+# "properties:" de cada target) — no versionarlos evita que el token de
+# Mapbox (u otro dato inyectado por variable de entorno) acabe en git.
+ios-native-nav/RydrNav/Info.plist
+ios-native-nav/RydrRideWidgets/Info.plist
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -17,8 +46,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
