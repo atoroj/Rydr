@@ -5,8 +5,12 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from app.shared.database import Base, engine
 from app.shared.migrations import run_light_migrations
+from app.shared.rate_limit import limiter
 from app.shared.uploads_router import UPLOAD_DIR, router as uploads_router
 from app.users.infrastructure.user_router import router as user_router
 from app.auth.infrastructure.auth_router import router as auth_router
@@ -38,6 +42,14 @@ run_light_migrations(engine)
 load_dotenv()
 
 app = FastAPI()
+
+# Límite global (60/min por IP, ver app/shared/rate_limit.py) para toda la
+# API — los endpoints más sensibles a fuerza bruta/abuso (login, registro,
+# restablecer contraseña) tienen además su propio límite más estricto,
+# puesto a mano en su router con `@limiter.limit(...)`.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # `ALLOWED_ORIGINS` — lista separada por comas, vacía por defecto (ver
 # .env.example). CORS es cosa del navegador: la app iOS no lo sufre ni se

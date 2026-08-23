@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from typing import List
 from sqlalchemy.orm import Session
+from app.shared.rate_limit import limiter
 from app.meetups.infrastructure.sql_meetup_repository import SqlAlchemyMeetupRepository
 from app.motorbikes.infraestructure.sql_motorbike_repository import SqlAlchemyMotorbikeRepository
 from app.riders.infrastructure.sql_follow_repository import SqlAlchemyFollowRepository
@@ -33,9 +34,10 @@ def get_account_deletion_service(db: Session = Depends(get_db)) -> AccountDeleti
     )
 
 @router.post("/", response_model=UserResponse)
-def create_user(request: UserCreate, service: UserService = Depends(get_service)):
+@limiter.limit("5/minute")
+def create_user(request: Request, body: UserCreate, service: UserService = Depends(get_service)):
     try:
-        created_user = service.create_user(request.username, request.email, request.password, request.role)
+        created_user = service.create_user(body.username, body.email, body.password, body.role)
         return created_user
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -47,7 +49,7 @@ def get_users(service: UserService = Depends(get_service)):
 @router.get("/email/{email}", response_model=UserResponse)
 def get_user_by_email(email: str, service: UserService = Depends(get_service)):
     user = service.get_user_by_email(email)
-
+    
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

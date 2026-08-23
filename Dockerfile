@@ -24,4 +24,11 @@ COPY app ./app
 EXPOSE 8000
 
 # Sin --reload (eso es solo para desarrollo, ver Pipfile: script "dev").
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --proxy-headers --forwarded-allow-ips='*': sin esto, el rate limiting
+# por IP (ver app/shared/rate_limit.py) vería siempre la IP de Caddy (el
+# único que le habla al backend, por la red interna de Docker Compose) en
+# vez de la del cliente real, y todo el mundo compartiría el mismo
+# límite. Seguro poner '*' aquí porque el backend no está expuesto al
+# exterior — solo Caddy puede llegarle directamente (ver
+# docker-compose.yml: "backend" no publica ningún puerto).
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]
