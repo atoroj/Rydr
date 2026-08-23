@@ -9,6 +9,7 @@ final class LoginViewController: UIViewController {
     private let passwordField = UITextField()
     private let loginButton = UIButton(type: .system)
     private let googleButton = UIButton(type: .system)
+    private let forgotPasswordButton = UIButton(type: .system)
     private let createAccountButton = UIButton(type: .system)
     private let spinner = UIActivityIndicatorView(style: .medium)
     private var stackCenterYConstraint: NSLayoutConstraint!
@@ -115,14 +116,19 @@ final class LoginViewController: UIViewController {
         googleButton.heightAnchor.constraint(equalToConstant: AppTheme.gloveButtonHeight).isActive = true
         googleButton.addTarget(self, action: #selector(onGoogleTapped), for: .touchUpInside)
 
+        forgotPasswordButton.setTitle("¿Olvidaste tu contraseña?", for: .normal)
+        forgotPasswordButton.titleLabel?.font = AppFont.body(14)
+        forgotPasswordButton.setTitleColor(AppTheme.textSecondary(0.7), for: .normal)
+        forgotPasswordButton.addTarget(self, action: #selector(onForgotPasswordTapped), for: .touchUpInside)
+
         createAccountButton.setTitle("¿No tienes cuenta? Crea una", for: .normal)
         createAccountButton.titleLabel?.font = AppFont.body(14)
         createAccountButton.setTitleColor(AppTheme.textSecondary(0.7), for: .normal)
         createAccountButton.addTarget(self, action: #selector(onCreateAccountTapped), for: .touchUpInside)
 
         let stack = UIStackView(arrangedSubviews: [
-            logoStack, spacer(48), emailField, spacer(16), passwordField, spacer(32),
-            loginButton, spacer(14), dividerRow(), spacer(14), googleButton, spinner,
+            logoStack, spacer(48), emailField, spacer(16), passwordField, spacer(12), forgotPasswordButton,
+            spacer(20), loginButton, spacer(14), googleButton, spinner,
             spacer(20), createAccountButton,
         ])
         stack.axis = .vertical
@@ -141,24 +147,6 @@ final class LoginViewController: UIViewController {
         let v = UIView()
         v.heightAnchor.constraint(equalToConstant: height).isActive = true
         return v
-    }
-
-    private func dividerRow() -> UIView {
-        func line() -> UIView {
-            let v = UIView()
-            v.backgroundColor = AppTheme.cardBorder
-            v.heightAnchor.constraint(equalToConstant: 1).isActive = true
-            return v
-        }
-        let label = UILabel()
-        label.styleAsLabel("o", size: 12.5, medium: true, color: AppTheme.textSecondary(0.45), tracking: 0.6)
-        label.setContentHuggingPriority(.required, for: .horizontal)
-
-        let row = UIStackView(arrangedSubviews: [line(), label, line()])
-        row.axis = .horizontal
-        row.spacing = 10
-        row.alignment = .center
-        return row
     }
 
     @objc private func onLoginTapped() {
@@ -224,6 +212,10 @@ final class LoginViewController: UIViewController {
 
     @objc private func onCreateAccountTapped() {
         navigationController?.pushViewController(CreateAccountViewController(), animated: true)
+    }
+
+    @objc private func onForgotPasswordTapped() {
+        navigationController?.pushViewController(ForgotPasswordViewController(), animated: true)
     }
 }
 

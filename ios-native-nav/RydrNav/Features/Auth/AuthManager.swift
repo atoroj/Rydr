@@ -57,6 +57,17 @@ final class AuthManager {
         NotificationCenter.default.post(name: .authDidChange, object: nil)
     }
 
+    /// Restablecer contraseña: ninguno de los dos pasos toca la sesión
+    /// (no hay usuario logueado todavía en este flujo), así que solo
+    /// reenvían al repositorio.
+    func requestPasswordReset(email: String) async throws {
+        try await repository.requestPasswordReset(email: email)
+    }
+
+    func resetPassword(email: String, code: String, newPassword: String) async throws {
+        try await repository.resetPassword(email: email, code: code, newPassword: newPassword)
+    }
+
     /// Actualiza el perfil (avatar/username/privacidad) y refresca el
     /// estado global para que top bar, ajustes y perfil social se vean al
     /// momento — equivalente a `AuthNotifier.updateProfile` en Flutter.

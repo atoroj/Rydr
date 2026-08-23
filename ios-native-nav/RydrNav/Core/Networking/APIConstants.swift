@@ -19,6 +19,8 @@ enum APIConstants {
 
     static let login = "/auth/login"
     static let googleLogin = "/auth/google"
+    static let forgotPassword = "/auth/forgot-password"
+    static let resetPassword = "/auth/reset-password"
     static let users = "/users"
     static let motorbikes = "/motorbikes"
     static let rides = "/rides"

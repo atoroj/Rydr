@@ -49,6 +49,23 @@ struct AuthRepository {
         return try await login(email: email, password: password)
     }
 
+    /// Pide el código de 6 dígitos por email — el backend responde 204
+    /// siempre, exista o no ese email (no filtra qué cuentas están
+    /// registradas), así que aquí tampoco hay nada que distinguir.
+    func requestPasswordReset(email: String) async throws {
+        try await client.requestVoid(.post, APIConstants.forgotPassword, body: ["email": email])
+    }
+
+    /// Cambia la contraseña con el código recibido por email. El backend
+    /// responde 400 si el código no vale (caducado, incorrecto o ya
+    /// usado) — `APIClient` ya lo convierte en un `APIError` que llega
+    /// tal cual al llamador.
+    func resetPassword(email: String, code: String, newPassword: String) async throws {
+        try await client.requestVoid(.post, APIConstants.resetPassword, body: [
+            "email": email, "code": code, "new_password": newPassword,
+        ])
+    }
+
     func restoreSession() -> UserModel? {
         guard keychain.get(KeychainStore.Keys.accessToken) != nil,
               let idString = keychain.get(KeychainStore.Keys.userId),
