@@ -1,5 +1,7 @@
+import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -33,12 +35,19 @@ Base.metadata.create_all(bind=engine)
 # que añada una columna.
 run_light_migrations(engine)
 
+load_dotenv()
+
 app = FastAPI()
 
-# Permite peticiones desde Flutter Web (localhost) y cualquier origen en desarrollo
+# `ALLOWED_ORIGINS` — lista separada por comas, vacía por defecto (ver
+# .env.example). CORS es cosa del navegador: la app iOS no lo sufre ni se
+# beneficia de él, así que esto es higiene razonable para si algún día
+# hay un cliente web, no la protección real de esta API (eso lo hace el
+# JWT, y contra fuerza bruta/abuso, el rate limiting).
+allowed_origins = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "").split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
