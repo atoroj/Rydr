@@ -57,6 +57,14 @@ final class AuthManager {
         NotificationCenter.default.post(name: .authDidChange, object: nil)
     }
 
+    /// Borra la cuenta en el servidor y, si sale bien, cierra la sesión
+    /// local igual que `logout()` — no queda nada que "recordar" de una
+    /// cuenta que ya no existe.
+    func deleteAccount() async throws {
+        try await repository.deleteAccount()
+        logout()
+    }
+
     /// Restablecer contraseña: ninguno de los dos pasos toca la sesión
     /// (no hay usuario logueado todavía en este flujo), así que solo
     /// reenvían al repositorio.

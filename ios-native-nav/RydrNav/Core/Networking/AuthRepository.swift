@@ -108,4 +108,13 @@ struct AuthRepository {
     func logout() {
         keychain.deleteAll()
     }
+
+    /// Borra la cuenta y todo lo que le pertenece en el servidor (motos,
+    /// rutas, rides, quedadas organizadas, follows...) — ver
+    /// `DELETE /users/me` / `AccountDeletionService`. No hace falta
+    /// limpiar la sesión local aparte: `AuthManager.deleteAccount()` llama
+    /// a `logout()` justo después de que esto tenga éxito.
+    func deleteAccount() async throws {
+        try await client.requestVoid(.delete, "\(APIConstants.users)/me")
+    }
 }

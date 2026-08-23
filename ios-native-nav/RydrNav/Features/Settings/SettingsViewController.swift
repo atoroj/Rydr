@@ -68,11 +68,14 @@ final class SettingsViewController: UIViewController {
         let logoutRow = tappableRow(
             icon: "rectangle.portrait.and.arrow.right", title: "Cerrar sesión",
             action: #selector(onLogoutTapped), destructive: true)
+        let deleteAccountRow = tappableRow(
+            icon: "trash", title: "Eliminar cuenta",
+            action: #selector(onDeleteAccountTapped), destructive: true)
 
         let stack = UIStackView(arrangedSubviews: [
             avatarButton, changePhotoLabel, usernameLabel, emailLabel,
             spacer(24), privacyRow, divider(), ridesRow, divider(), offlineMapsRow, divider(),
-            termsRow, divider(), privacyPolicyRow, divider(), logoutRow,
+            termsRow, divider(), privacyPolicyRow, divider(), logoutRow, divider(), deleteAccountRow,
         ])
         stack.axis = .vertical
         stack.spacing = 8
@@ -91,6 +94,7 @@ final class SettingsViewController: UIViewController {
             termsRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             privacyPolicyRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             logoutRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            deleteAccountRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
     }
 
@@ -221,6 +225,29 @@ final class SettingsViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "Cerrar sesión", style: .destructive) { _ in
             AuthManager.shared.logout()
             (UIApplication.shared.delegate as? AppDelegate)?.showLogin()
+        })
+        present(alert, animated: true)
+    }
+
+    @objc private func onDeleteAccountTapped() {
+        let alert = UIAlertController(
+            title: "Eliminar cuenta",
+            message: "Se borrará tu perfil, motos, rutas, rides, quedadas que organizas y todo lo demás. Esta acción no se puede deshacer.",
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Eliminar cuenta", style: .destructive) { [weak self] _ in
+            Task {
+                do {
+                    try await AuthManager.shared.deleteAccount()
+                    await MainActor.run {
+                        (UIApplication.shared.delegate as? AppDelegate)?.showLogin()
+                    }
+                } catch {
+                    await MainActor.run {
+                        self?.showAlert(title: "No se pudo eliminar la cuenta", message: error.localizedDescription)
+                    }
+                }
+            }
         })
         present(alert, animated: true)
     }
