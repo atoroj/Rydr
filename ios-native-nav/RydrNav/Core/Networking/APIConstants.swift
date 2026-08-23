@@ -28,4 +28,19 @@ enum APIConstants {
     static let riders = "/riders"
     static let meetups = "/meetups"
     static let uploadImage = "/uploads/image"
+
+    // Términos/privacidad (ver ./legal en la raíz del repo) — los sirve
+    // Caddy directamente, no el backend (ver DEPLOY.md), así que viven en
+    // un host aparte de `baseURL` en desarrollo (donde el backend corre
+    // suelto con `pipenv run dev`, sin Caddy delante). Para probarlos en
+    // local hace falta el `docker compose up` de la raíz del repo
+    // corriendo a la vez. Actualiza esto al dominio real en cuanto haya
+    // un servidor de verdad desplegado (ver DEPLOY.md).
+    #if targetEnvironment(simulator)
+    static let legalBaseURL = URL(string: "https://127.0.0.1")!
+    #else
+    static let legalBaseURL = URL(string: "https://192.168.0.5")!
+    #endif
+    static let termsURL = legalBaseURL.appendingPathComponent("legal/terms.html")
+    static let privacyURL = legalBaseURL.appendingPathComponent("legal/privacy.html")
 }

@@ -1,4 +1,5 @@
 import PhotosUI
+import SafariServices
 import UIKit
 
 /// Ajustes: avatar, nombre, cuenta privada, acceso al historial de rides y
@@ -62,13 +63,16 @@ final class SettingsViewController: UIViewController {
         let ridesRow = tappableRow(icon: "clock.arrow.circlepath", title: "Mis rides", action: #selector(onRidesTapped))
         let offlineMapsRow = tappableRow(
             icon: "arrow.down.circle", title: "Mapas sin conexión", action: #selector(onOfflineMapsTapped))
+        let termsRow = tappableRow(icon: "doc.text", title: "Términos de uso", action: #selector(onTermsTapped))
+        let privacyPolicyRow = tappableRow(icon: "hand.raised", title: "Privacidad", action: #selector(onPrivacyPolicyTapped))
         let logoutRow = tappableRow(
             icon: "rectangle.portrait.and.arrow.right", title: "Cerrar sesión",
             action: #selector(onLogoutTapped), destructive: true)
 
         let stack = UIStackView(arrangedSubviews: [
             avatarButton, changePhotoLabel, usernameLabel, emailLabel,
-            spacer(24), privacyRow, divider(), ridesRow, divider(), offlineMapsRow, divider(), logoutRow,
+            spacer(24), privacyRow, divider(), ridesRow, divider(), offlineMapsRow, divider(),
+            termsRow, divider(), privacyPolicyRow, divider(), logoutRow,
         ])
         stack.axis = .vertical
         stack.spacing = 8
@@ -84,6 +88,8 @@ final class SettingsViewController: UIViewController {
             privacyRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             ridesRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             offlineMapsRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            termsRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            privacyPolicyRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
             logoutRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
     }
@@ -198,6 +204,14 @@ final class SettingsViewController: UIViewController {
 
     @objc private func onOfflineMapsTapped() {
         navigationController?.pushViewController(OfflineMapsViewController(), animated: true)
+    }
+
+    @objc private func onTermsTapped() {
+        present(SFSafariViewController(url: APIConstants.termsURL), animated: true)
+    }
+
+    @objc private func onPrivacyPolicyTapped() {
+        present(SFSafariViewController(url: APIConstants.privacyURL), animated: true)
     }
 
     @objc private func onLogoutTapped() {

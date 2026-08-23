@@ -1,3 +1,4 @@
+import SafariServices
 import UIKit
 
 /// Registro propio (usuario/email/contraseña) — mismo aire visual que
@@ -10,9 +11,14 @@ final class CreateAccountViewController: UIViewController {
     private let usernameField = UITextField()
     private let emailField = UITextField()
     private let passwordField = UITextField()
+    private let acceptCheckbox = UIButton(type: .system)
+    private let acceptTextView = UITextView()
     private let createButton = UIButton(type: .system)
     private let spinner = UIActivityIndicatorView(style: .medium)
     private var stackCenterYConstraint: NSLayoutConstraint!
+    private var hasAcceptedTerms = false {
+        didSet { updateCreateButtonEnabled() }
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -94,6 +100,28 @@ final class CreateAccountViewController: UIViewController {
         passwordField.returnKeyType = .go
         passwordField.delegate = self
 
+        acceptCheckbox.setImage(UIImage(systemName: "square"), for: .normal)
+        acceptCheckbox.tintColor = AppTheme.textSecondary(0.7)
+        acceptCheckbox.addTarget(self, action: #selector(onCheckboxTapped), for: .touchUpInside)
+        acceptCheckbox.setContentHuggingPriority(.required, for: .horizontal)
+        acceptCheckbox.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        acceptTextView.attributedText = acceptAttributedText()
+        acceptTextView.font = AppFont.body(13)
+        acceptTextView.textColor = AppTheme.textSecondary(0.8)
+        acceptTextView.linkTextAttributes = [.foregroundColor: AppTheme.primary]
+        acceptTextView.isEditable = false
+        acceptTextView.isScrollEnabled = false
+        acceptTextView.backgroundColor = .clear
+        acceptTextView.textContainerInset = .zero
+        acceptTextView.textContainer.lineFragmentPadding = 0
+        acceptTextView.delegate = self
+
+        let acceptRow = UIStackView(arrangedSubviews: [acceptCheckbox, acceptTextView])
+        acceptRow.axis = .horizontal
+        acceptRow.spacing = 8
+        acceptRow.alignment = .top
+
         createButton.setTitle("Crear cuenta", for: .normal)
         createButton.titleLabel?.font = AppFont.body(17, .bold)
         createButton.backgroundColor = AppTheme.primary
@@ -101,10 +129,11 @@ final class CreateAccountViewController: UIViewController {
         createButton.layer.cornerRadius = 8
         createButton.heightAnchor.constraint(equalToConstant: AppTheme.gloveButtonHeight).isActive = true
         createButton.addTarget(self, action: #selector(onCreateTapped), for: .touchUpInside)
+        updateCreateButtonEnabled()
 
         let stack = UIStackView(arrangedSubviews: [
             logoStack, spacer(48), usernameField, spacer(16), emailField, spacer(16), passwordField,
-            spacer(32), createButton, spinner,
+            spacer(20), acceptRow, spacer(20), createButton, spinner,
         ])
         stack.axis = .vertical
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -130,6 +159,32 @@ final class CreateAccountViewController: UIViewController {
         return v
     }
 
+    /// "He leído y acepto los Términos de uso y la Política de
+    /// privacidad", con los dos nombres como enlaces reales — se
+    /// interceptan en `textView(_:shouldInteractWith:...)` para abrirlos
+    /// dentro de la app (`SFSafariViewController`) en vez de saltar a
+    /// Safari.
+    private func acceptAttributedText() -> NSAttributedString {
+        let text = NSMutableAttributedString(string: "He leído y acepto los ")
+        text.append(NSAttributedString(string: "Términos de uso", attributes: [.link: APIConstants.termsURL]))
+        text.append(NSAttributedString(string: " y la "))
+        text.append(NSAttributedString(string: "Política de privacidad", attributes: [.link: APIConstants.privacyURL]))
+        text.append(NSAttributedString(string: "."))
+        return text
+    }
+
+    private func updateCreateButtonEnabled() {
+        createButton.isEnabled = hasAcceptedTerms
+        createButton.alpha = hasAcceptedTerms ? 1 : 0.5
+    }
+
+    @objc private func onCheckboxTapped() {
+        hasAcceptedTerms.toggle()
+        acceptCheckbox.setImage(
+            UIImage(systemName: hasAcceptedTerms ? "checkmark.square.fill" : "square"), for: .normal)
+        acceptCheckbox.tintColor = hasAcceptedTerms ? AppTheme.primary : AppTheme.textSecondary(0.7)
+    }
+
     @objc private func onCreateTapped() {
         let username = usernameField.text?.trimmingCharacters(in: .whitespaces) ?? ""
         guard !username.isEmpty,
@@ -137,6 +192,10 @@ final class CreateAccountViewController: UIViewController {
               let password = passwordField.text, password.count >= 6
         else {
             showAlert(title: "Revisa los datos", message: "Usuario, email válido y contraseña de al menos 6 caracteres.")
+            return
+        }
+        guard hasAcceptedTerms else {
+            showAlert(title: "Falta un paso", message: "Tienes que aceptar los términos de uso y la política de privacidad.")
             return
         }
 
@@ -171,5 +230,15 @@ extension CreateAccountViewController: UITextFieldDelegate {
             onCreateTapped()
         }
         return true
+    }
+}
+
+extension CreateAccountViewController: UITextViewDelegate {
+    func textView(
+        _ textView: UITextView, shouldInteractWith url: URL, in characterRange: NSRange,
+        interaction: UITextItemInteraction
+    ) -> Bool {
+        present(SFSafariViewController(url: url), animated: true)
+        return false
     }
 }
