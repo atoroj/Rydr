@@ -16,3 +16,5 @@ class RouteModel(Base):
     created_at = Column(DateTime, nullable=False)
     times_ridden = Column(Integer, default=0, nullable=False)
     cover_image_url = Column(String, nullable=True)
+    start_lat = Column(Float, nullable=True)
+    start_lng = Column(Float, nullable=True)

@@ -4,7 +4,7 @@ from typing import Optional, List
 from app.rides.domain.ride import Ride
 from app.routes.domain.route import Route
 from app.routes.domain.route_repository import RouteRepository
-from app.shared.geo import split_into_segments, total_distance_km_by_segments
+from app.shared.geo import extract_start_point, split_into_segments, total_distance_km_by_segments
 
 
 class RouteService:
@@ -61,6 +61,7 @@ class RouteService:
         else:
             duration_minutes = max(1, int((ride.finished_at - ride.started_at).total_seconds() / 60))
 
+        start_point = extract_start_point(geojson)
         route = Route(
             id=None,
             name=name,
@@ -72,6 +73,8 @@ class RouteService:
             created_at=datetime.now(),
             times_ridden=0,
             cover_image_url=cover_image_url,
+            start_lat=start_point[0] if start_point else None,
+            start_lng=start_point[1] if start_point else None,
         )
         return self.repository.save(route)
 
@@ -85,6 +88,7 @@ class RouteService:
         duration_minutes: int,
         cover_image_url: Optional[str] = None,
     ) -> Route:
+        start_point = extract_start_point(geojson)
         route = Route(
             id=None,
             name=name,
@@ -96,6 +100,8 @@ class RouteService:
             created_at=datetime.now(),
             times_ridden=0,
             cover_image_url=cover_image_url,
+            start_lat=start_point[0] if start_point else None,
+            start_lng=start_point[1] if start_point else None,
         )
         return self.repository.save(route)
 

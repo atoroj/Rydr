@@ -51,3 +51,71 @@ def test_get_profile_of_nonexistent_user_returns_404(client):
     _, token = register_and_login(client, "1")
     response = client.get("/riders/9999/profile", headers=auth_headers(token))
     assert response.status_code == 404
+
+
+# --- Tests: feed "cerca de ti" ---
+
+MADRID = (40.4168, -3.7038)
+BARCELONA = (41.3874, 2.1686)
+
+
+def create_route(client, author_id: int, lat: float, lng: float, name: str = "Ruta cercana") -> int:
+    response = client.post("/routes", json={
+        "name": name, "author_id": author_id,
+        "geojson": {"type": "LineString", "coordinates": [[lng, lat], [lng + 0.01, lat + 0.01]]},
+        "distance_km": 5.0, "duration_minutes": 20,
+    })
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+def test_nearby_feed_includes_public_route_within_radius(client):
+    viewer_id, viewer_token = register_and_login(client, "1")
+    author_id, _ = register_and_login(client, "2")
+    create_route(client, author_id, *MADRID)
+
+    response = client.get(
+        f"/riders/feed/nearby?lat={MADRID[0]}&lng={MADRID[1]}", headers=auth_headers(viewer_token))
+
+    assert response.status_code == 200
+    authors = [item["author"]["id"] for item in response.json()]
+    assert author_id in authors
+
+
+def test_nearby_feed_excludes_route_outside_radius(client):
+    _, viewer_token = register_and_login(client, "1")
+    author_id, _ = register_and_login(client, "2")
+    create_route(client, author_id, *BARCELONA)
+
+    # Desde Madrid, con el radio por defecto (100km) Barcelona (~500km) no entra.
+    response = client.get(
+        f"/riders/feed/nearby?lat={MADRID[0]}&lng={MADRID[1]}", headers=auth_headers(viewer_token))
+
+    assert response.status_code == 200
+    authors = [item["author"]["id"] for item in response.json()]
+    assert author_id not in authors
+
+
+def test_nearby_feed_excludes_private_author(client):
+    _, viewer_token = register_and_login(client, "1")
+    author_id, author_token = register_and_login(client, "2")
+    create_route(client, author_id, *MADRID)
+    client.patch("/users/me", json={"is_private": True}, headers=auth_headers(author_token))
+
+    response = client.get(
+        f"/riders/feed/nearby?lat={MADRID[0]}&lng={MADRID[1]}", headers=auth_headers(viewer_token))
+
+    assert response.status_code == 200
+    authors = [item["author"]["id"] for item in response.json()]
+    assert author_id not in authors
+
+
+def test_nearby_feed_excludes_own_routes(client):
+    viewer_id, viewer_token = register_and_login(client, "1")
+    create_route(client, viewer_id, *MADRID)
+
+    response = client.get(
+        f"/riders/feed/nearby?lat={MADRID[0]}&lng={MADRID[1]}", headers=auth_headers(viewer_token))
+
+    assert response.status_code == 200
+    assert response.json() == []

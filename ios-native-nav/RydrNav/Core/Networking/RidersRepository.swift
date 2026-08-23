@@ -46,4 +46,11 @@ struct RidersRepository {
     func feed() async throws -> [FeedItem] {
         try await client.request(.get, "\(APIConstants.riders)/feed")
     }
+
+    /// Pestaña "Cerca de ti": rutas públicas de cualquiera (no solo a
+    /// quien sigues), más cercanas primero a la posición dada.
+    func nearbyFeed(lat: Double, lng: Double, radiusKm: Double = 100) async throws -> [FeedItem] {
+        try await client.request(
+            .get, "\(APIConstants.riders)/feed/nearby?lat=\(lat)&lng=\(lng)&radius_km=\(radiusKm)")
+    }
 }

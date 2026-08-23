@@ -148,6 +148,17 @@ def list_followers(
     return [_rider_summary(service, u, current_user.id) for u in users if u]
 
 
+def _feed_item_response(service: FollowService, item, viewer_id: int) -> FeedItemResponse:
+    return FeedItemResponse(
+        author=_rider_summary(service, item.author, viewer_id),
+        route=RouteSummaryResponse(
+            id=item.route.id, name=item.route.name, geojson=item.route.geojson,
+            distance_km=item.route.distance_km, duration_minutes=item.route.duration_minutes,
+            cover_image_url=item.route.cover_image_url, created_at=item.route.created_at,
+        ),
+    )
+
+
 @router.get("/feed", response_model=List[FeedItemResponse])
 def get_activity_feed(
     service: FollowService = Depends(get_service),
@@ -156,15 +167,25 @@ def get_activity_feed(
     """Rutas publicadas por la gente a la que sigues, más recientes
     primero — portada de la app."""
     return [
-        FeedItemResponse(
-            author=_rider_summary(service, item.author, current_user.id),
-            route=RouteSummaryResponse(
-                id=item.route.id, name=item.route.name, geojson=item.route.geojson,
-                distance_km=item.route.distance_km, duration_minutes=item.route.duration_minutes,
-                cover_image_url=item.route.cover_image_url, created_at=item.route.created_at,
-            ),
-        )
+        _feed_item_response(service, item, current_user.id)
         for item in service.get_activity_feed(current_user.id)
+    ]
+
+
+@router.get("/feed/nearby", response_model=List[FeedItemResponse])
+def get_nearby_feed(
+    lat: float,
+    lng: float,
+    radius_km: float = 100,
+    service: FollowService = Depends(get_service),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """Rutas públicas de cualquiera (no solo a quien sigues) cerca de
+    `lat`/`lng`, más cercanas primero — pestaña "Cerca de ti", alternativa
+    a "Siguiendo" en el feed de portada."""
+    return [
+        _feed_item_response(service, item, current_user.id)
+        for item in service.get_nearby_feed(current_user.id, lat, lng, radius_km=radius_km)
     ]
 
 

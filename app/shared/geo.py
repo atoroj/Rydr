@@ -37,3 +37,25 @@ def total_distance_km_by_segments(points_with_flags: list[tuple[float, float, bo
     """Igual que `total_distance_km`, pero sin sumar el salto entre el
     último punto de un tramo y el primero del siguiente."""
     return sum(total_distance_km(segment) for segment in split_into_segments(points_with_flags))
+
+
+def extract_start_point(geojson: dict) -> tuple[float, float] | None:
+    """Primer punto (lat, lon) del trazado — `LineString` o
+    `MultiLineString` (el primer punto del primer tramo). `None` si el
+    geojson no trae coordenadas. Usado para guardar `Route.start_lat`/
+    `start_lng` al crear una ruta (ver `RouteService`), así el feed
+    "cerca de ti" no tiene que parsear el geojson entero en cada
+    consulta — las coordenadas de GeoJSON van en orden [lon, lat]."""
+    coordinates = geojson.get("coordinates")
+    if not coordinates:
+        return None
+    first = coordinates[0]
+    # `LineString`: coordinates = [[lon, lat], ...] → first = [lon, lat].
+    # `MultiLineString`: coordinates = [[[lon, lat], ...], ...] → first
+    # tramo = [[lon, lat], ...], su primer punto = first[0].
+    if geojson.get("type") == "MultiLineString":
+        if not first:
+            return None
+        first = first[0]
+    lon, lat = first[0], first[1]
+    return (lat, lon)

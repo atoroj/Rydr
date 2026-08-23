@@ -23,6 +23,8 @@ class SqlAlchemyRouteRepository(RouteRepository):
             created_at=model.created_at,
             times_ridden=model.times_ridden,
             cover_image_url=model.cover_image_url,
+            start_lat=model.start_lat,
+            start_lng=model.start_lng,
         )
 
     def save(self, route: Route) -> Route:
@@ -36,6 +38,8 @@ class SqlAlchemyRouteRepository(RouteRepository):
             created_at=route.created_at,
             times_ridden=route.times_ridden,
             cover_image_url=route.cover_image_url,
+            start_lat=route.start_lat,
+            start_lng=route.start_lng,
         )
         self.db.add(route_db)
         self.db.commit()

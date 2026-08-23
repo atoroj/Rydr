@@ -1,21 +1,33 @@
+import CoreLocation
 import UIKit
 
-/// Portada de la app: feed de actividad con las rutas que han hecho los
-/// riders a los que sigues, más recientes primero — primera pestaña del
-/// shell (spec: "feed de actividad de mis amigos riders, las rutas que han
-/// realizado").
+/// Portada de la app: feed de actividad, con dos pestañas — "Siguiendo"
+/// (rutas de la gente que sigues, como antes) y "Cerca de ti" (rutas
+/// públicas de cualquiera, ordenadas por cercanía a tu posición actual).
+/// Mismo patrón de interruptor que `RidersViewController` (Siguiendo/
+/// Seguidores/Solicitudes).
 final class FeedViewController: UIViewController {
+    private enum Mode: Int { case following, nearby }
+
     private let repository = RidersRepository()
+    private let locationManager = CLLocationManager()
+    private var locationContinuation: CheckedContinuation<CLLocationCoordinate2D?, Never>?
+
+    private let segmented = UISegmentedControl(items: ["Siguiendo", "Cerca de ti"])
     private var collectionView: UICollectionView!
     private let emptyLabel = UILabel()
     private var items: [FeedItem] = []
     private let cellId = "FeedItem"
 
+    private var currentMode: Mode { Mode(rawValue: segmented.selectedSegmentIndex) ?? .following }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Actividad"
         view.backgroundColor = AppTheme.bg0
+        locationManager.delegate = self
         installTopBar()
+        setupSegmented()
         setupCollectionView()
         setupEmptyLabel()
     }
@@ -23,6 +35,22 @@ final class FeedViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         reload()
+    }
+
+    private func setupSegmented() {
+        segmented.selectedSegmentIndex = 0
+        segmented.backgroundColor = AppTheme.bg2
+        segmented.selectedSegmentTintColor = AppTheme.bg3
+        segmented.setTitleTextAttributes([.foregroundColor: AppTheme.textSecondary(0.6)], for: .normal)
+        segmented.setTitleTextAttributes([.foregroundColor: AppTheme.text], for: .selected)
+        segmented.addTarget(self, action: #selector(onSegmentChanged), for: .valueChanged)
+        segmented.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(segmented)
+        NSLayoutConstraint.activate([
+            segmented.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            segmented.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            segmented.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+        ])
     }
 
     private func setupCollectionView() {
@@ -49,7 +77,7 @@ final class FeedViewController: UIViewController {
 
         view.addSubview(collectionView)
         NSLayoutConstraint.activate([
-            collectionView.topAnchor.constraint(equalTo: view.topAnchor),
+            collectionView.topAnchor.constraint(equalTo: segmented.bottomAnchor, constant: 8),
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -57,7 +85,6 @@ final class FeedViewController: UIViewController {
     }
 
     private func setupEmptyLabel() {
-        emptyLabel.text = "Sigue a otros riders para ver aquí sus rutas"
         emptyLabel.font = AppFont.body(15)
         emptyLabel.textColor = AppTheme.textSecondary(0.5)
         emptyLabel.textAlignment = .center
@@ -73,6 +100,10 @@ final class FeedViewController: UIViewController {
         ])
     }
 
+    @objc private func onSegmentChanged() {
+        reload()
+    }
+
     @objc private func onPullToRefresh() {
         Task {
             await load()
@@ -85,9 +116,43 @@ final class FeedViewController: UIViewController {
     }
 
     private func load() async {
-        items = (try? await repository.feed()) ?? []
-        collectionView.reloadData()
-        emptyLabel.isHidden = !items.isEmpty
+        switch currentMode {
+        case .following:
+            emptyLabel.text = "Sigue a otros riders para ver aquí sus rutas"
+            items = (try? await repository.feed()) ?? []
+            collectionView.reloadData()
+            emptyLabel.isHidden = !items.isEmpty
+
+        case .nearby:
+            guard let coordinate = await currentLocation() else {
+                items = []
+                collectionView.reloadData()
+                emptyLabel.text = "Activa la ubicación para ver rutas públicas cerca de ti"
+                emptyLabel.isHidden = false
+                return
+            }
+            emptyLabel.text = "No hay rutas públicas cerca de ti todavía"
+            items = (try? await repository.nearbyFeed(lat: coordinate.latitude, lng: coordinate.longitude)) ?? []
+            collectionView.reloadData()
+            emptyLabel.isHidden = !items.isEmpty
+        }
+    }
+
+    // MARK: - Posición actual (una sola vez, al entrar en "Cerca de ti")
+
+    private func currentLocation() async -> CLLocationCoordinate2D? {
+        if locationManager.authorizationStatus == .notDetermined {
+            locationManager.requestWhenInUseAuthorization()
+        }
+        guard locationManager.authorizationStatus == .authorizedWhenInUse
+            || locationManager.authorizationStatus == .authorizedAlways
+        else { return nil }
+
+        if let cached = locationManager.location?.coordinate { return cached }
+        return await withCheckedContinuation { continuation in
+            locationContinuation = continuation
+            locationManager.requestLocation()
+        }
     }
 }
 
@@ -120,5 +185,19 @@ extension FeedViewController: UICollectionViewDataSource, UICollectionViewDelega
             geojson: item.route.geojson, distanceKm: item.route.distanceKm,
             durationMinutes: item.route.durationMinutes, timesRidden: 0, coverImageUrl: item.route.coverImageUrl)
         navigationController?.pushViewController(RouteDetailViewController(route: route), animated: true)
+    }
+}
+
+// MARK: - CLLocationManagerDelegate
+
+extension FeedViewController: CLLocationManagerDelegate {
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        locationContinuation?.resume(returning: locations.last?.coordinate)
+        locationContinuation = nil
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        locationContinuation?.resume(returning: nil)
+        locationContinuation = nil
     }
 }

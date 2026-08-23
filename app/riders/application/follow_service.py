@@ -9,11 +9,15 @@ from app.riders.domain.follow_repository import FollowRepository
 from app.routes.domain.route import Route
 from app.routes.domain.route_repository import RouteRepository
 from app.shared.errors import NotFoundError
+from app.shared.geo import haversine_km
 from app.users.domain.user import User
 from app.users.domain.user_repository import UserRepository
 
 RECENT_ROUTES_LIMIT = 10
 FEED_LIMIT = 30
+# "Tu zona" para el feed "cerca de ti" — razonable para una escapada de un
+# día en moto. Sin ajuste en la UI todavía, ver plan.
+NEARBY_RADIUS_KM = 100
 
 
 @dataclass
@@ -157,3 +161,35 @@ class FollowService:
 
         items.sort(key=lambda i: i.route.created_at, reverse=True)
         return items[:limit]
+
+    def get_nearby_feed(
+        self, user_id: int, lat: float, lng: float,
+        radius_km: float = NEARBY_RADIUS_KM, limit: int = FEED_LIMIT,
+    ) -> List[FeedItem]:
+        """Rutas públicas de CUALQUIERA (no solo a quien sigues) cerca de
+        tu posición actual, más cercanas primero — complementa
+        `get_activity_feed` ("Siguiendo") con un "Cerca de ti". Se
+        excluyen: rutas sin punto de partida calculado (`Route.start_lat`/
+        `start_lng`, ver `RouteService`), rutas tuyas propias (esto es
+        para descubrir a otros, no para volver a verte a ti mismo) y
+        autores con perfil privado."""
+        candidates: List[tuple[float, FeedItem]] = []
+        authors_by_id: dict[int, Optional[User]] = {}
+
+        for route in self.route_repo.get_all_public():
+            if route.start_lat is None or route.start_lng is None:
+                continue
+            if route.author_id == user_id:
+                continue
+            if route.author_id not in authors_by_id:
+                authors_by_id[route.author_id] = self.user_repo.get_by_id(route.author_id)
+            author = authors_by_id[route.author_id]
+            if author is None or author.is_private:
+                continue
+
+            distance = haversine_km(lat, lng, route.start_lat, route.start_lng)
+            if distance <= radius_km:
+                candidates.append((distance, FeedItem(author=author, route=route)))
+
+        candidates.sort(key=lambda pair: pair[0])
+        return [item for _, item in candidates[:limit]]
