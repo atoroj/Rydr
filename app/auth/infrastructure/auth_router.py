@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.shared.database import get_db
-from app.auth.application.auth_dto import GoogleLoginRequest, LoginRequest
+from app.auth.application.auth_dto import ForgotPasswordRequest, GoogleLoginRequest, LoginRequest, ResetPasswordRequest
 # Imports de infraestructura para "montar" las piezas
 from app.users.infrastructure.sql_user_repository import SqlAlchemyUserRepository
 from app.users.application.user_service import UserService
 from app.auth.infrastructure.adapters.user_adapter import LocalUserAdapter
+from app.auth.infrastructure.sql_password_reset_repository import SqlAlchemyPasswordResetRepository
 from app.auth.application.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -19,7 +20,8 @@ def get_auth_service(db: Session = Depends(get_db)):
     adapter = LocalUserAdapter(user_service)
 
     # 3. Montamos Auth con el Adaptador
-    return AuthService(adapter)
+    password_reset_repo = SqlAlchemyPasswordResetRepository(db)
+    return AuthService(adapter, password_reset_repo)
 
 @router.post("/login")
 def login(request: LoginRequest, service: AuthService = Depends(get_auth_service)):
@@ -39,3 +41,18 @@ def login_with_google(request: GoogleLoginRequest, service: AuthService = Depend
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token de Google inválido")
     return {"access_token": token, "token_type": "bearer"}
+
+# Siempre responde 204, exista o no ese email — si devolviera 404 para
+# los que no existen, cualquiera podría usar este endpoint para
+# comprobar qué emails están registrados en la app.
+@router.post("/forgot-password", status_code=status.HTTP_204_NO_CONTENT)
+def forgot_password(request: ForgotPasswordRequest, service: AuthService = Depends(get_auth_service)):
+    service.request_password_reset(request.email)
+    return None
+
+@router.post("/reset-password")
+def reset_password(request: ResetPasswordRequest, service: AuthService = Depends(get_auth_service)):
+    ok = service.reset_password(request.email, request.code, request.new_password)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Código inválido o caducado")
+    return {"ok": True}

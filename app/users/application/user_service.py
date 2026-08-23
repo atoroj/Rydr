@@ -55,3 +55,11 @@ class UserService:
 
     def update_profile(self, user_id: int, username: str | None = None, avatar_url: str | None = None, is_private: bool | None = None) -> User:
         return self.repository.update_profile(user_id, username, avatar_url, is_private)
+
+    def update_password(self, user_id: int, new_password: str) -> User:
+        """Usado al completar un restablecimiento de contraseña — ver
+        `AuthService.reset_password`. No revoca sesiones activas (los JWT
+        ya emitidos siguen valiendo hasta que caduquen por su cuenta;
+        no hay lista de revocación todavía)."""
+        hashed_password = get_password_hashed(new_password)
+        return self.repository.update_password(user_id, hashed_password)

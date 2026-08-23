@@ -100,3 +100,91 @@ def test_password_login_on_google_only_account_returns_401_not_500(client, monke
     response = client.post("/auth/login", json={"email": "sologoogle@gmail.com", "password": "cualquiera"})
 
     assert response.status_code == 401
+
+# --- Tests: restablecer contraseña ---
+
+def test_forgot_password_nonexistent_email_still_returns_204_and_sends_nothing(client, monkeypatch):
+    sent = []
+    monkeypatch.setattr("app.auth.application.auth_service.send_email", lambda **kwargs: sent.append(kwargs))
+
+    response = client.post("/auth/forgot-password", json={"email": "no-existe@example.com"})
+
+    assert response.status_code == 204
+    assert sent == []
+
+
+def _request_reset_code(client, monkeypatch, email: str) -> str:
+    captured = {}
+
+    def fake_send_email(to, subject, html):
+        captured["html"] = html
+
+    monkeypatch.setattr("app.auth.application.auth_service.send_email", fake_send_email)
+    response = client.post("/auth/forgot-password", json={"email": email})
+    assert response.status_code == 204
+
+    import re
+    match = re.search(r">(\d{6})<", captured["html"])
+    assert match, "no se encontró el código de 6 dígitos en el email"
+    return match.group(1)
+
+
+def test_reset_password_with_correct_code_changes_password(client, monkeypatch):
+    client.post("/users/", json={
+        "username": "resetuser", "email": "reset@example.com", "password": "oldpassword1", "role": "rider",
+    })
+    code = _request_reset_code(client, monkeypatch, "reset@example.com")
+
+    response = client.post("/auth/reset-password", json={
+        "email": "reset@example.com", "code": code, "new_password": "newpassword2",
+    })
+    assert response.status_code == 200
+
+    old_login = client.post("/auth/login", json={"email": "reset@example.com", "password": "oldpassword1"})
+    assert old_login.status_code == 401
+
+    new_login = client.post("/auth/login", json={"email": "reset@example.com", "password": "newpassword2"})
+    assert new_login.status_code == 200
+
+
+def test_reset_password_with_wrong_code_returns_400(client, monkeypatch):
+    client.post("/users/", json={
+        "username": "resetuser2", "email": "reset2@example.com", "password": "oldpassword1", "role": "rider",
+    })
+    _request_reset_code(client, monkeypatch, "reset2@example.com")
+
+    response = client.post("/auth/reset-password", json={
+        "email": "reset2@example.com", "code": "000000", "new_password": "newpassword2",
+    })
+    assert response.status_code == 400
+
+    still_old = client.post("/auth/login", json={"email": "reset2@example.com", "password": "oldpassword1"})
+    assert still_old.status_code == 200
+
+
+def test_reset_password_code_can_only_be_used_once(client, monkeypatch):
+    client.post("/users/", json={
+        "username": "resetuser3", "email": "reset3@example.com", "password": "oldpassword1", "role": "rider",
+    })
+    code = _request_reset_code(client, monkeypatch, "reset3@example.com")
+
+    first = client.post("/auth/reset-password", json={
+        "email": "reset3@example.com", "code": code, "new_password": "newpassword2",
+    })
+    assert first.status_code == 200
+
+    second = client.post("/auth/reset-password", json={
+        "email": "reset3@example.com", "code": code, "new_password": "anotherpassword3",
+    })
+    assert second.status_code == 400
+
+
+def test_reset_password_without_requesting_returns_400(client):
+    client.post("/users/", json={
+        "username": "resetuser4", "email": "reset4@example.com", "password": "oldpassword1", "role": "rider",
+    })
+
+    response = client.post("/auth/reset-password", json={
+        "email": "reset4@example.com", "code": "123456", "new_password": "newpassword2",
+    })
+    assert response.status_code == 400

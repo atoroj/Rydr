@@ -78,3 +78,12 @@ class SqlAlchemyUserRepository(UserRepository):
         self.db.commit()
         self.db.refresh(user_db)
         return self._to_domain(user_db)
+
+    def update_password(self, user_id: int, hashed_password: str) -> User:
+        user_db = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+        if user_db is None:
+            raise ValueError("Usuario no encontrado")
+        user_db.password = hashed_password
+        self.db.commit()
+        self.db.refresh(user_db)
+        return self._to_domain(user_db)

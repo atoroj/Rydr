@@ -12,3 +12,9 @@ class UserProviderPort(ABC):
         """Login/registro con "Continuar con Google" — ver
         `UserService.get_or_create_google_user`."""
         pass
+
+    @abstractmethod
+    def update_password(self, user_id: int, new_password: str) -> None:
+        """Usado al completar un restablecimiento de contraseña — ver
+        `AuthService.reset_password`."""
+        pass

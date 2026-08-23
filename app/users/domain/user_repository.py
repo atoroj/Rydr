@@ -6,11 +6,11 @@ class UserRepository(ABC):
     @abstractmethod
     def save(self, user: User) -> User:
         pass
-    
+
     @abstractmethod
     def get_by_email(self, email: str) -> Optional[User]:
         pass
-    
+
     @abstractmethod
     def get_all(self) -> List[User]:
         pass
@@ -31,4 +31,8 @@ class UserRepository(ABC):
     def set_google_id(self, user_id: int, google_id: str) -> User:
         """Enlaza una cuenta ya existente (creada con contraseña) con una
         cuenta de Google — ver `UserService.get_or_create_google_user`."""
+        pass
+
+    @abstractmethod
+    def update_password(self, user_id: int, hashed_password: str) -> User:
         pass

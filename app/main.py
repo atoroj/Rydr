@@ -21,6 +21,7 @@ from app.rides.infrastructure.ride_model import RideModel, TrackPointModel
 from app.routes.infrastructure.route_model import RouteModel
 from app.riders.infrastructure.follow_model import FollowModel
 from app.meetups.infrastructure.meetup_model import MeetupModel, MeetupParticipantModel
+from app.auth.infrastructure.password_reset_model import PasswordResetCodeModel
 
 # Crea las tablas que falten (no toca las que ya existen).
 Base.metadata.create_all(bind=engine)
