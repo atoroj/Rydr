@@ -119,7 +119,7 @@ targets:
     sources:
       - RydrRideWidgets
       - path: RydrNav/Core/LiveActivity/RydrRideActivityAttributes.swift
-        group: RydrRideWidgets
+        buildPhase: sources
     info:
       path: RydrRideWidgets/Info.plist
       properties:

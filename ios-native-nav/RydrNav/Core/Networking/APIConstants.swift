@@ -14,7 +14,7 @@ enum APIConstants {
     #else
     // Actualiza esta IP si cambias de red — es la que tenía el Mac al
     // escribir esto (`ipconfig getifaddr en0`).
-    static let baseURL = URL(string: "http://192.168.0.5:8000")!
+    static let baseURL = URL(string: "http://192.168.1.196:8000")!
     #endif
 
     static let login = "/auth/login"
