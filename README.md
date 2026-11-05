@@ -60,8 +60,6 @@ Rydr/
 
 1. **Install Dependencies:**
    ```bash
-   pip install -r requirements.txt
-   # OR if using pipenv
    pipenv install
    pipenv shell
    ```
@@ -96,3 +94,6 @@ open RydrNav.xcodeproj
 inyecta en `Info.plist` en tiempo de generación (nunca hardcodeado en
 `project.yml`, ver el comentario ahí) para que no acabe en el repo.
 `Info.plist` está en `.gitignore` porque también es un archivo generado.
+
+> La parte Swift/UIKit de este proyecto (`ios-native-nav/`) se ha
+> desarrollado con agentes de código de IA bajo mi supervisión.
